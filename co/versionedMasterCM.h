@@ -66,6 +66,7 @@ namespace co
         virtual void removeSlaves( NodePtr node );
         virtual const Nodes getSlaveNodes() const
             { Mutex mutex( _slaves ); return *_slaves; }
+        virtual void addPushSlaves( const Nodes& nodes);
 
     protected:
         /** The list of subscribed slave nodes. */

@@ -169,6 +169,9 @@ public:
     CO_API void push( const uint128_t& groupID, const uint128_t& objectType,
                       const Nodes& nodes );
 
+    /** Push and Map the instance data of the object to the given nodes */
+    CO_API void pushMap( const uint128_t& groupID, const uint128_t& objectType,
+                         const Nodes& nodes );
     /**
      * Commit a new version of this object.
      *
@@ -423,6 +426,7 @@ public:
     void transfer( Object* from );
 
     void applyMapData( const uint128_t& version ); //!< @internal
+    void setVersion( const uint128_t& version ); //!< @internal
     void sendInstanceData( Nodes& nodes ); //!< @internal
     //@}
 

@@ -45,6 +45,12 @@ namespace co
         void push( const Nodes& receivers, const uint128_t& objectID,
                    const uint128_t& groupID, const uint128_t& typeID );
 
+        void pushMap( const Nodes& receivers, const uint128_t& objectID,
+                      const uint128_t& groupID, const uint128_t& typeID,
+                      const uint128_t& version,
+                      const uint32_t instanceID,
+                      const Object::ChangeType changeType );
+
         /** Set up mapping of the given version to the given node. */
         void enableMap( const uint128_t& version, NodePtr node,
                         const uint32_t instanceID );
