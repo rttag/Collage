@@ -1225,7 +1225,7 @@ bool RSPConnection::_handleAck( const size_t bytes )
     RSPConnectionPtr connection = _findConnection( ack.readerID );
     if( !connection )
     {
-        LBWARN << "ack from unknown connection " << ack.readerID
+        LBWARN << "received ack from unknown connection " << ack.readerID
             << " - connection recently timed out?" << std::endl;
         return false;
     }
@@ -1290,7 +1290,8 @@ bool RSPConnection::_handleNack( const size_t bytes )
     RSPConnectionPtr connection = _findConnection( nack.readerID );
     if( !connection )
     {
-        LBUNREACHABLE;
+        LBWARN << "received nack from unknown connection " << nack.readerID
+            << " - connection recently timed out?" << std::endl;
         return false;
         // it's an unknown connection, TODO add this connection?
     }
@@ -1383,7 +1384,8 @@ bool RSPConnection::_handleAckRequest( const size_t bytes )
     RSPConnectionPtr connection = _findConnection( writerID );
     if( !connection )
     {
-        LBUNREACHABLE;
+        LBWARN << "received ackrequest from unknown connection " << writerID
+            << " - connection recently timed out?" << std::endl;
         return false;
     }
 
