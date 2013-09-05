@@ -497,6 +497,7 @@ void RSPConnection::_handleConnectedTimeout()
         // exit else close all failed child connections
         if ( all )
         {
+            LBERROR << "closing all child connections" << std::endl;
             _sendSimpleDatagram( ID_EXIT, _id, 0 );
             _appBuffers.pushFront( 0 ); // unlock write function
 
@@ -519,6 +520,8 @@ void RSPConnection::_handleConnectedTimeout()
             RSPConnectionPtr child = *i;
             if ( child->_acked < _sequence - 1 && _id != child->_id )
             {
+                LBERROR << "removing child connection " << child->_id 
+                        << std::endl;
                 _sendSimpleDatagram( ID_EXIT, child->_id, 0 );
                 _removeConnection( child->_id );
             }
@@ -933,7 +936,9 @@ void RSPConnection::_handleAcceptIDData( const size_t bytes )
             break;
 
         default:
-            LBUNIMPLEMENTED;
+            LBERROR << "error: received datagram type " << node.type 
+                << " from " << node.connectionID 
+                << " while in handleAcceptIDData" << std::endl;
             break;
     }
 }
@@ -974,7 +979,9 @@ void RSPConnection::_handleInitData( const size_t bytes, const bool connected )
             return;
 
         default:
-            LBUNIMPLEMENTED;
+            LBERROR << "error: received datagram type " << node.type 
+                    << " from " << node.connectionID 
+                    << " while in handleInitData" << std::endl;
             break;
     }
 }
@@ -1218,7 +1225,8 @@ bool RSPConnection::_handleAck( const size_t bytes )
     RSPConnectionPtr connection = _findConnection( ack.readerID );
     if( !connection )
     {
-        LBUNREACHABLE;
+        LBWARN << "ack from unknown connection " << ack.readerID
+            << " - connection recently timed out?" << std::endl;
         return false;
     }
 
