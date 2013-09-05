@@ -124,6 +124,28 @@ void VersionedMasterCM::addSlave( MasterCMCommand command )
     ObjectCM::_addSlave( command, _version );
 }
 
+void VersionedMasterCM::addPushSlaves(const Nodes& nodes)
+{
+    LB_TS_THREAD( _cmdThread );
+    Mutex mutex( _slaves );
+
+    for( NodesCIter i = nodes.begin(); i != nodes.end(); ++i )
+    {
+        NodePtr node = *i;
+
+        SlaveData data;
+        data.node = node;
+        data.instanceID = _object->getInstanceID();
+        data.maxVersion = std::numeric_limits< uint64_t >::max();
+        
+        _slaveData.push_back( data );
+        _updateMaxVersion();
+
+        _slaves->push_back( data.node );
+    }
+    stde::usort( *_slaves );
+}
+
 void VersionedMasterCM::removeSlave( NodePtr node, const uint32_t instanceID )
 {
     LB_TS_THREAD( _cmdThread );

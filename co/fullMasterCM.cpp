@@ -378,4 +378,14 @@ void FullMasterCM::push( const uint128_t& groupID, const uint128_t& typeID,
     instanceData->os.push( nodes, _object->getID(), groupID, typeID );
 }
 
+void FullMasterCM::pushMap( const uint128_t& groupID, const uint128_t& typeID,
+                            const Nodes& nodes )
+{
+    Mutex mutex( _slaves );
+    InstanceData* instanceData = _instanceDatas.back();
+    instanceData->os.pushMap( nodes, _object->getID(), groupID, typeID,
+                              getVersion(), _object->getInstanceID(), 
+                              _object->getChangeType() );
+}
+
 }

@@ -45,6 +45,9 @@ namespace co
         virtual uint128_t commit( const uint32_t incarnation );
         virtual void push( const uint128_t& groupID, const uint128_t& typeID,
                            const Nodes& nodes );
+        virtual void pushMap( const uint128_t& groupID,
+                              const uint128_t& typeID,
+                              const Nodes& nodes );
 
         /** @name Versioning */
         //@{

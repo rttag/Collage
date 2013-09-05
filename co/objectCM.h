@@ -60,6 +60,9 @@ public:
     virtual void push( const uint128_t& groupID, const uint128_t& typeID,
                        const Nodes& nodes );
 
+    virtual void pushMap( const uint128_t& groupID, const uint128_t& typeID,
+                          const Nodes& nodes );
+
     /**
      * Commit a new version.
      *
@@ -118,6 +121,7 @@ public:
      * @param command the subscribe command initiating the add.
      */
     virtual void addSlave( MasterCMCommand command ) = 0;
+    virtual void addPushSlaves( const Nodes& nodes) { /*NO OP*/}
 
     /**
      * Remove a subscribed slave.
@@ -137,6 +141,9 @@ public:
     /** Apply the initial data after mapping. */
     virtual void applyMapData( const uint128_t& version )
         { LBUNIMPLEMENTED; }
+
+    virtual void setVersion( const uint128_t& version )
+    { LBUNIMPLEMENTED; }
 
     /** Add existing instance data to the object (from local node cache) */
     virtual void addInstanceDatas( const ObjectDataIStreamDeque&,
