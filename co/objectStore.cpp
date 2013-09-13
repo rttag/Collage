@@ -246,7 +246,8 @@ void ObjectStore::_attachObject( Object* object, const UUID& id,
                                  const uint32_t inInstanceID )
 {
     LBASSERT( object );
-    LB_TS_THREAD( _receiverThread );
+    //now also called from command thread in complete pushMap...
+    //LB_TS_THREAD( _receiverThread );
 
     uint32_t instanceID = inInstanceID;
     if( inInstanceID == EQ_INSTANCE_INVALID )

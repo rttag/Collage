@@ -126,7 +126,6 @@ void VersionedMasterCM::addSlave( MasterCMCommand command )
 
 void VersionedMasterCM::addPushSlaves(const Nodes& nodes)
 {
-    LB_TS_THREAD( _cmdThread );
     Mutex mutex( _slaves );
 
     for( NodesCIter i = nodes.begin(); i != nodes.end(); ++i )
