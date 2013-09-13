@@ -34,7 +34,6 @@
 
 //#define EQ_INSTRUMENT_RSP
 #define EQ_RSP_MERGE_WRITES
-#define EQ_RSP_MAX_TIMEOUTS 1000
 
 // Note: Do not use version > 255, endianness detection magic relies on this.
 const uint16_t EQ_RSP_PROTOCOL_VERSION = 0;
@@ -91,8 +90,8 @@ RSPConnection::RSPConnection()
     , _readBuffer( 0 )
     , _readBufferPos( 0 )
     , _sequence( 0 )
-    // ensure we have a handleConnectedTimeout before the write pop
-    , _writeTimeOut( Global::IATTR_RSP_ACK_TIMEOUT * EQ_RSP_MAX_TIMEOUTS * 2 )
+    , _maxTimeouts( Global::getTimeout() / 
+                     Global::getIAttribute( Global::IATTR_RSP_ACK_TIMEOUT ) )
 {
     _buildNewID();
     ConnectionDescriptionPtr description = _getDescription();
@@ -479,7 +478,7 @@ void RSPConnection::_handleConnectedTimeout()
 
     _processOutgoing();
 
-    if( _timeouts >= EQ_RSP_MAX_TIMEOUTS )
+    if( _timeouts >= _maxTimeouts )
     {
         LBERROR << "Too many timeouts during send: " << _timeouts << std::endl;
         bool all = true;
@@ -638,7 +637,7 @@ void RSPConnection::_processOutgoing()
     // (repeat) ack request
     _clock.reset();
     ++_timeouts;
-    if ( _timeouts < EQ_RSP_MAX_TIMEOUTS )
+    if ( _timeouts < _maxTimeouts )
         _sendAckRequest();
     _setTimeout( timeout );
 }
@@ -1579,7 +1578,10 @@ int64_t RSPConnection::write( const void* inData, const uint64_t bytes )
             _postWakeup();
 
         Buffer* buffer;
-        if ( !_appBuffers.timedPop( _writeTimeOut, buffer ) )
+        //ensure timeout occurs after handleConnectedTimeout
+        const unsigned timeout = Global::getTimeout() == LB_TIMEOUT_INDEFINITE ?
+                            LB_TIMEOUT_INDEFINITE : Global::getTimeout() + 1000;
+        if ( !_appBuffers.timedPop( timeout, buffer ) )
         {
             LBERROR << "Timeout while writing" << std::endl;
             buffer = 0;
