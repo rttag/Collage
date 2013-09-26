@@ -37,6 +37,8 @@
 #  include <lunchbox/monitor.h>
 #  define SELECT_TIMEOUT WAIT_TIMEOUT
 #  define SELECT_ERROR   WAIT_FAILED
+#  define NEW_THREADS_NUM 2
+#  define THREADS_INCR    1
 #  define MAX_CONNECTIONS (MAXIMUM_WAIT_OBJECTS - 1)
 #else
 #  include <poll.h>
@@ -186,7 +188,7 @@ private:
 }
 
 ConnectionSet::ConnectionSet()
-        : _impl( new detail::ConnectionSet )
+        : _impl( new detail::ConnectionSet ), lastInd(0), _threadMode(false)
 {}
 ConnectionSet::~ConnectionSet()
 {
@@ -231,6 +233,51 @@ void ConnectionSet::interrupt()
     _impl->interrupt();
 }
 
+
+
+void ConnectionSet::_addConnectionToNewThreads ( ConnectionPtr connection )
+{
+	//add new threads, for the first time add NEW_THREADS_NUM for next times THREADS_INCR
+	size_t threads_new_num = static_cast<size_t>( ( _impl->threads.size() > 0 )?( THREADS_INCR ):( NEW_THREADS_NUM ) );
+	for ( size_t i = 0; i < threads_new_num; ++i ) 
+	{
+		Thread* thread = new Thread( this );
+		_impl->threads.push_back( thread );
+	}
+	size_t threads_num = _impl->threads.size();
+	size_t thread_size = _impl->allConnections.size()/threads_num;
+	
+	for ( size_t i = 0; i < _impl->threads.size(); ++i ) 
+	{
+		Thread* thread = _impl->threads[i];
+		// remove himself as a listener from connections
+		thread->set.removeSelfListenerFromConnections();
+		//all connections should be removed
+		thread->set._impl->connections.clear();
+		thread->set._impl->allConnections.clear();
+
+		for ( size_t j = i*(thread_size); j < (i + 1)*(thread_size); ++j )
+		{
+			thread->set.addConnection( _impl->allConnections[j] );
+		}
+	}
+	size_t conn_left = _impl->allConnections.size()%thread_size;
+	ThreadsIter it_thrd = _impl->threads.begin();
+	for (ConnectionsCIter it_conn = _impl->allConnections.end() - ( conn_left ); it_conn != _impl->allConnections.end(); ++it_conn, ++it_thrd) 
+	{
+		Thread* thread = *it_thrd;
+		thread->set.addConnection(*it_conn);
+	}
+	//launch threads
+	for ( ThreadsIter i = _impl->threads.begin(); i != _impl->threads.end(); ++i) 
+	{
+		Thread* thread = *i;
+		if ( !thread->isRunning() )
+			thread->start();
+	}
+
+}
+
 void ConnectionSet::addConnection( ConnectionPtr connection )
 {
     LBASSERT( connection->isConnected() || connection->isListening( ));
@@ -242,7 +289,7 @@ void ConnectionSet::addConnection( ConnectionPtr connection )
 #ifdef _WIN32
         LBASSERT( _impl->allConnections.size() <
                   MAX_CONNECTIONS * MAX_CONNECTIONS );
-        if( _impl->connections.size() < MAX_CONNECTIONS - _impl->threads.size())
+        if( !_threadMode && _impl->connections.size() < MAX_CONNECTIONS - _impl->threads.size())
         {
             // can handle it ourself
             _impl->connections.push_back( connection );
@@ -250,26 +297,31 @@ void ConnectionSet::addConnection( ConnectionPtr connection )
         }
         else
         {
-            // add to existing thread
-            for( ThreadsCIter i = _impl->threads.begin();
-                 i != _impl->threads.end(); ++i )
-            {
-                Thread* thread = *i;
-                if( thread->set._impl->connections.size() > MAX_CONNECTIONS )
-                    continue;
-
-                thread->set.addConnection( connection );
-                return;
-            }
-
-            // add to new thread
-            Thread* thread = new Thread( this );
-            thread->set.addConnection( connection );
-            thread->set.addConnection( _impl->connections.back( ));
-            _impl->connections.pop_back();
-
-            _impl->threads.push_back( thread );
-            thread->start();
+			_threadMode = true;
+			//create new threads or not
+			if ( _impl->threads.size() > 0 ) 
+			{
+				// try to add to existing thread
+				ThreadsCIter it_min = _impl->threads.begin();
+				// get thread with minimum connections and add new connection there, if possible
+				for ( ThreadsCIter i = _impl->threads.begin() ; i != _impl->threads.end(); ++i )
+				{
+					Thread* cur_thread = *i;
+					Thread* min_thread = *it_min;
+					if ( cur_thread->set._impl->connections.size() < min_thread->set._impl->connections.size() ) 
+						it_min = i;
+				}
+				Thread* min_thread = *it_min;
+				if ( min_thread->set._impl->connections.size() < MAX_CONNECTIONS )
+					min_thread->set.addConnection( connection );
+				else //create one more thread and distribute connections among them 
+					_addConnectionToNewThreads( connection );
+			} 
+			else 
+			{
+				_addConnectionToNewThreads( connection );
+				_impl->connections.clear();
+			}
         }
 #else
         connection->addListener( _impl );
@@ -279,6 +331,16 @@ void ConnectionSet::addConnection( ConnectionPtr connection )
     }
 
     setDirty();
+}
+
+void ConnectionSet::removeSelfListenerFromConnections() 
+{
+	for( ConnectionsCIter i = _impl->connections.begin();
+		i != _impl->connections.end(); ++i )
+	{
+		ConnectionPtr connection = *i;
+		connection->removeListener(_impl);
+	}
 }
 
 bool ConnectionSet::removeConnection( ConnectionPtr connection )
@@ -331,6 +393,7 @@ bool ConnectionSet::removeConnection( ConnectionPtr connection )
     }
 
     setDirty();
+	lastInd = 0;
     return true;
 }
 
@@ -453,7 +516,7 @@ ConnectionSet::Event ConnectionSet::_getSelectResult( const uint32_t index )
     // WAR: Catch this and ignore the result, this seems to have no side-effects
     if( i >= _impl->fdSetResult.getSize( ))
         return EVENT_NONE;
-
+	lastInd = static_cast<size_t>( i );
     if( i > _impl->connections.size( ))
     {
         _impl->thread = _impl->fdSetResult[i].thread;
@@ -515,6 +578,7 @@ ConnectionSet::Event ConnectionSet::_getSelectResult( const uint32_t )
 }
 #endif // else not _WIN32
 
+
 bool ConnectionSet::_setupFDSet()
 {
     if( !_impl->dirty )
@@ -524,12 +588,31 @@ bool ConnectionSet::_setupFDSet()
         // if it doesn't. The man page seems to hint that poll changes fds.
         _impl->fdSet = _impl->fdSetCopy;
 #endif
+		// rotate connections or threads
+		uint64_t rotateInd = std::min( lastInd, static_cast<uint64_t>(_impl->fdSet.getSize() - 1) );
+		rotateInd = std::max( rotateInd, static_cast<uint64_t>(1) );
+		uint64_t strart_ind = 1;
+		_impl->lock.set();
+		// rotate fdSet
+		std::rotate( _impl->fdSet.getData() + 1, _impl->fdSet.getData() + rotateInd, _impl->fdSet.getData() + _impl->fdSet.getSize() );
+		// rotate fdSetResult
+		std::rotate( _impl->fdSetResult.getData() + 1, _impl->fdSetResult.getData() + rotateInd, _impl->fdSetResult.getData() + _impl->fdSetResult.getSize() );
+		_impl->lock.unset();
         return true;
     }
 
     _impl->dirty = false;
     _impl->fdSet.setSize( 0 );
     _impl->fdSetResult.setSize( 0 );
+	// rotate connections or threads
+	if ( !_threadMode )
+	{
+		std::rotate( _impl->connections.begin(), _impl->connections.begin() + std::min( lastInd, _impl->connections.size() - 1 ), _impl->connections.end() );
+	}
+	else
+	{
+		std::rotate( _impl->threads.begin(), _impl->threads.begin() + std::min( lastInd, _impl->threads.size() - 1 ), _impl->threads.end() );
+	}
 
 #ifdef _WIN32
     // add self connection
@@ -543,6 +626,7 @@ bool ConnectionSet::_setupFDSet()
 
     // add regular connections
     _impl->lock.set();
+
     for( ConnectionsCIter i = _impl->connections.begin();
          i != _impl->connections.end(); ++i )
     {
@@ -564,7 +648,7 @@ bool ConnectionSet::_setupFDSet()
         result.connection = connection.get();
         _impl->fdSetResult.append( result );
     }
-
+	
     for( ThreadsCIter i=_impl->threads.begin(); i != _impl->threads.end(); ++i )
     {
         Thread* thread = *i;
@@ -593,6 +677,7 @@ bool ConnectionSet::_setupFDSet()
 
     // add regular connections
     _impl->lock.set();
+
     for( ConnectionsCIter i = _impl->allConnections.begin();
          i != _impl->allConnections.end(); ++i )
     {

@@ -20,6 +20,8 @@
 #ifndef CO_CONNECTION_SET_H
 #define CO_CONNECTION_SET_H
 
+#include <algorithm>
+
 #include <co/api.h>
 #include <co/types.h>
 #include <lunchbox/thread.h> // for LB_TS_VAR
@@ -59,6 +61,8 @@ namespace detail { class ConnectionSet; }
 
         /** Remove the connection from this set. Thread-safe. @version 1.0 */
         CO_API bool removeConnection( ConnectionPtr connection );
+
+		CO_API void removeSelfListenerFromConnections();
 
         /** Remove all connections from this set. Thread-safe. @version 1.0 */
         CO_API size_t getSize() const;
@@ -109,11 +113,21 @@ namespace detail { class ConnectionSet; }
         //@}
 
     private:
-        detail::ConnectionSet* const _impl;
+		void _addConnectionToNewThreads ( ConnectionPtr connection );
+		/*template<typename T>
+		void _rotateVector(T beg, T end, const uint64_t step) {
+			T it = beg + step;
+			std::rotate( beg, it, end );
+		}*/
+		
 
+        detail::ConnectionSet* const _impl;
+		uint64_t lastInd;
+		bool _threadMode;
         void _clear();
         bool _setupFDSet();
         bool _buildFDSet();
+		//void _rotateVector();
 
         Event _getSelectResult( const uint32_t index );
         LB_TS_VAR( _selectThread );
