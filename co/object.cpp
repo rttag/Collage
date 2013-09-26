@@ -207,6 +207,13 @@ void Object::push( const uint128_t& groupID, const uint128_t& typeID,
     impl_->cm->push( groupID, typeID, nodes );
 }
 
+void Object::pushMap( const uint128_t& groupID, const uint128_t& typeID,
+                      const Nodes& nodes )
+{
+    impl_->cm->pushMap( groupID, typeID, nodes );
+    impl_->cm->addPushSlaves( nodes );
+}
+
 uint128_t Object::commit( const uint32_t incarnation )
 {
     return impl_->cm->commit( incarnation );
@@ -271,6 +278,11 @@ void Object::setupChangeManager( const Object::ChangeType type,
 void Object::applyMapData( const uint128_t& version )
 {
     impl_->cm->applyMapData( version );
+}
+
+void Object::setVersion( const uint128_t& version )
+{
+    impl_->cm->setVersion( version );
 }
 
 void Object::sendInstanceData( Nodes& nodes )

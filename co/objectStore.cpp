@@ -93,6 +93,8 @@ ObjectStore::ObjectStore( LocalNode* localNode )
         CmdFunc( this, &ObjectStore::_cmdRemoveNode ), queue );
     localNode->_registerCommand( CMD_NODE_OBJECT_PUSH,
         CmdFunc( this, &ObjectStore::_cmdObjectPush ), queue );
+    localNode->_registerCommand( CMD_NODE_OBJECT_PUSH_MAP,
+        CmdFunc( this, &ObjectStore::_cmdObjectPushMap ), queue );
 }
 
 ObjectStore::~ObjectStore()
@@ -244,7 +246,8 @@ void ObjectStore::_attachObject( Object* object, const UUID& id,
                                  const uint32_t inInstanceID )
 {
     LBASSERT( object );
-    LB_TS_THREAD( _receiverThread );
+    //now also called from command thread in complete pushMap...
+    //LB_TS_THREAD( _receiverThread );
 
     uint32_t instanceID = inInstanceID;
     if( inInstanceID == EQ_INSTANCE_INVALID )
@@ -436,6 +439,93 @@ bool ObjectStore::mapObjectSync( const uint32_t requestID )
     const bool mapped = object->isAttached();
     if( mapped )
         object->applyMapData( version ); // apply initial instance data
+
+    object->notifyAttached();
+    LBLOG( LOG_OBJECTS ) << "Mapped " << lunchbox::className( object ) << std::endl;
+    return mapped;
+}
+
+bool ObjectStore::completePushMap( Object* object, const UUID& id,
+                                   const uint128_t& version, 
+                                   const uint32_t inMasterInstanceID,
+                                   const uint32_t changeType, NodePtr master)
+{
+    LBASSERTINFO( id.isGenerated(), id );
+    if( !id.isGenerated( ))
+        return false;
+
+    LB_TS_NOT_THREAD( _receiverThread );
+    LBLOG( LOG_OBJECTS )
+        << "Mapping " << lunchbox::className( object ) << " to id " << id
+        << " version " << version << std::endl;
+    LBASSERT( object );
+    LBASSERTINFO( id.isGenerated(), id );
+
+    if( !object || !id.isGenerated( ))
+    {
+        LBWARN << "Invalid object " << object << " or id " << id << std::endl;
+        return false;
+    }
+
+    const bool isAttached = object->isAttached();
+    const bool isMaster = object->isMaster();
+    LBASSERT( !isAttached );
+    LBASSERT( !isMaster ) ;
+    if( isAttached || isMaster )
+    {
+        LBWARN << "Invalid object state: attached " << isAttached << " master "
+            << isMaster << std::endl;
+        return false;
+    }
+    
+    uint128_t minCachedVersion = VERSION_HEAD;
+    uint128_t maxCachedVersion = VERSION_NONE;
+    uint32_t masterInstanceID = inMasterInstanceID;
+    bool useCache = false;
+
+    if( _instanceCache )
+    {
+        const InstanceCache::Data& cached = (*_instanceCache)[ id ];
+        if( cached != InstanceCache::Data::NONE )
+        {
+            const ObjectDataIStreamDeque& versions = cached.versions;
+            LBASSERT( !cached.versions.empty( ));
+            useCache = true;
+            masterInstanceID = cached.masterInstanceID;
+            minCachedVersion = versions.front()->getVersion();
+            maxCachedVersion = versions.back()->getVersion();
+            LBLOG( LOG_OBJECTS ) << "Object " << id << " have v"
+                << minCachedVersion << ".."
+                << maxCachedVersion << std::endl;
+        }
+    }
+
+    object->notifyAttach();
+
+    const uint32_t instanceID = _genNextID( _instanceIDs );
+
+    LBLOG( LOG_OBJECTS ) << "map object success" << " id " << id << "." << instanceID
+        << std::endl;
+
+    // set up change manager and attach object to dispatch table
+
+    LBASSERT( object );
+    LBASSERT( !object->isMaster( ));
+
+    const co::Object::ChangeType type = co::Object::ChangeType(changeType);
+    //
+    object->setupChangeManager( type, false, _localNode, masterInstanceID );
+    _attachObject( object, id, instanceID );
+
+
+    object->setMasterNode( master );
+
+    if( useCache )
+        _instanceCache->release( id, 1 );
+   
+    const bool mapped = object->isAttached();
+    if( mapped )
+        object->setVersion( version ); // apply initial instance data
 
     object->notifyAttached();
     LBLOG( LOG_OBJECTS ) << "Mapped " << lunchbox::className( object ) << std::endl;
@@ -1095,6 +1185,24 @@ bool ObjectStore::_cmdObjectPush( ICommand& command )
     ObjectDataIStream* is = _pushData.pull( objectID );
 
     _localNode->objectPush( groupID, typeID, objectID, *is );
+    _pushData.recycle( is );
+    return true;
+}
+
+bool ObjectStore::_cmdObjectPushMap( ICommand& command )
+{
+    LB_TS_THREAD( _commandThread );
+
+    const uint128_t& objectID = command.get< uint128_t >();
+    const uint128_t& groupID = command.get< uint128_t >();
+    const uint128_t& typeID = command.get< uint128_t >();
+    const uint128_t& version = command.get< uint128_t >();
+    const uint32_t masterInstanceID = command.get< uint32_t >();
+    const Object::ChangeType changeType = command.get< Object::ChangeType >();
+
+    ObjectDataIStream* is = _pushData.pull( objectID );
+
+    _localNode->objectPushMap( groupID, typeID, objectID, *is, version, masterInstanceID, changeType, command.getNode( ) );
     _pushData.recycle( is );
     return true;
 }

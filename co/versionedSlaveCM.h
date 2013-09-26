@@ -65,6 +65,7 @@ namespace co
         virtual void removeSlaves( NodePtr ) {}
 
         virtual void applyMapData( const uint128_t& version );
+        virtual void setVersion( const uint128_t& version ){ _version = version; }
         virtual void addInstanceDatas( const ObjectDataIStreamDeque&,
                                        const uint128_t& startVersion );
     private:

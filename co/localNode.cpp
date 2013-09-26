@@ -679,6 +679,16 @@ bool LocalNode::mapObject( Object* object, const UUID& id,
     return mapObjectSync( requestID );
 }
 
+bool LocalNode::completePushMap( Object* object, const UUID& id,
+                                 const uint128_t& version, const uint32_t
+                                 masterInstanceID, const uint32_t changeType,
+                                 NodePtr master )
+{
+    return _impl->objectStore->completePushMap( object, id, version,
+                                                masterInstanceID, changeType,
+                                                master );
+}
+
 uint32_t LocalNode::mapObjectNB( Object* object, const UUID& id,
                                  const uint128_t& version )
 {
@@ -716,9 +726,26 @@ void LocalNode::objectPush( const uint128_t& groupID,
     if( i != _impl->pushHandlers->end( ))
         i->second( groupID, objectType, objectID, istream );
 
-    if( istream.hasData( ))
+    if( istream.wasUsed() && istream.hasData( ))
         LBWARN << "Incomplete Object::push for group " << groupID << " type "
                << objectType << " object " << objectID << std::endl;
+}
+
+void LocalNode::objectPushMap( const uint128_t& groupID,
+                               const uint128_t& objectType,
+                               const uint128_t& objectID, DataIStream& istream,
+                               const uint128_t& version,
+                               const uint32_t masterInstanceID,
+                               const uint32_t changeType, NodePtr master  )
+{
+    lunchbox::ScopedRead mutex( _impl->pushHandlers );
+    HandlerHashCIter i = _impl->pushHandlers->find( groupID );
+    if( i != _impl->pushHandlers->end( ))
+        i->second( groupID, objectType, objectID, istream );
+
+    if( istream.wasUsed() && istream.hasData( ))
+        LBWARN << "Incomplete Object::pushMap for group " << groupID << " type "
+        << objectType << " object " << objectID << std::endl;
 }
 
 void LocalNode::registerPushHandler( const uint128_t& groupID,
@@ -1224,6 +1251,9 @@ void LocalNode::_handleDisconnect()
 
 bool LocalNode::_handleData()
 {
+    _impl->smallBuffers.compact();
+    _impl->bigBuffers.compact();
+
     ConnectionPtr connection = _impl->incoming.getConnection();
     LBASSERT( connection );
 

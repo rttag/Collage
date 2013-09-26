@@ -60,6 +60,26 @@ void ObjectCM::push( const uint128_t& groupID, const uint128_t& typeID,
     os.disable(); // handled by remote recv thread
 }
 
+void ObjectCM::pushMap( const uint128_t& groupID, const uint128_t& typeID,
+                        const Nodes& nodes)
+{
+    LBASSERT( _object );
+    LBASSERT( !nodes.empty( ));
+    if( nodes.empty( ))
+        return;
+
+    ObjectInstanceDataOStream os( this );
+    os.enablePush( getVersion(), nodes );
+    _object->getInstanceData( os );
+
+    // Send push notification to remote cmd thread while connections are valid
+    OCommand( os.getConnections(), CMD_NODE_OBJECT_PUSH_MAP )
+        << _object->getID() << groupID << typeID << getVersion()
+        << _object->getInstanceID() << _object->getChangeType();
+
+    os.disable(); // handled by remote recv thread
+}
+
 void ObjectCM::_addSlave( MasterCMCommand command, const uint128_t& version )
 {
     LBASSERT( version != VERSION_NONE );

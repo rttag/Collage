@@ -96,6 +96,12 @@ namespace co
         /** Finalize the mapping of a distributed object. */
         bool mapObjectSync( const uint32_t requestID );
 
+        /** Finalize the "mapping" of a push distributed object. */
+        bool completePushMap( Object* object, const UUID& id,
+                              const uint128_t& version, 
+                              const uint32_t masterInstanceID,
+                              const uint32_t changeType, NodePtr master  );
+
         /**
          * Unmap a mapped object.
          *
@@ -231,6 +237,7 @@ namespace co
         bool _cmdDisableSendOnRegister( ICommand& command );
         bool _cmdRemoveNode( ICommand& command );
         bool _cmdObjectPush( ICommand& command );
+        bool _cmdObjectPushMap( ICommand& command );
 
         LB_TS_VAR( _receiverThread );
         LB_TS_VAR( _commandThread );
