@@ -530,8 +530,10 @@ int64_t SocketConnection::write( const void* buffer, const uint64_t bytes )
 
     if( WSAGetLastError() != WSA_IO_PENDING )
           return -1;
-
-    const DWORD err = WaitForSingleObject( _overlappedWrite.hEvent, INFINITE );
+	
+	const unsigned timeout = Global::getTimeout() == LB_TIMEOUT_INDEFINITE ?
+													 LB_TIMEOUT_INDEFINITE : Global::getTimeout();
+	const DWORD err = WaitForSingleObject( _overlappedWrite.hEvent, timeout );
     switch( err )
     {
       case WAIT_FAILED:

@@ -1,4 +1,3 @@
-
 /* Copyright (c) 2005-2012, Stefan Eilemann <eile@equalizergraphics.com>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
@@ -19,8 +18,6 @@
 
 #ifndef CO_CONNECTION_SET_H
 #define CO_CONNECTION_SET_H
-
-#include <algorithm>
 
 #include <co/api.h>
 #include <co/types.h>
@@ -61,8 +58,6 @@ namespace detail { class ConnectionSet; }
 
         /** Remove the connection from this set. Thread-safe. @version 1.0 */
         CO_API bool removeConnection( ConnectionPtr connection );
-
-		CO_API void removeSelfListenerFromConnections();
 
         /** Remove all connections from this set. Thread-safe. @version 1.0 */
         CO_API size_t getSize() const;
@@ -113,22 +108,20 @@ namespace detail { class ConnectionSet; }
         //@}
 
     private:
-		void _addConnectionToNewThreads ( ConnectionPtr connection );
-		/*template<typename T>
-		void _rotateVector(T beg, T end, const uint64_t step) {
-			T it = beg + step;
-			std::rotate( beg, it, end );
-		}*/
-		
-
         detail::ConnectionSet* const _impl;
-		uint64_t lastInd;
-		bool _threadMode;
+
         void _clear();
         bool _setupFDSet();
         bool _buildFDSet();
-		//void _rotateVector();
-
+#ifdef _WIN32
+		void _createThread( const Connections& connection );
+		void _addConnectionToThread( ConnectionPtr connection );
+		void _rebalanceThreads();
+#endif		
+		void _rotateFDSet();
+		bool _isThreadMode;
+		bool _needRebalance;
+		uint32_t _lastIdx;
         Event _getSelectResult( const uint32_t index );
         LB_TS_VAR( _selectThread );
     };
