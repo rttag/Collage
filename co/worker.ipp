@@ -29,28 +29,37 @@ template< class Q > void WorkerThread< Q >::run()
         while( _commands.isEmpty( ))
             if( !notifyIdle( )) // nothing to do
                 break;
-
-        const ICommands& commands = _commands.popAll();
-        LBASSERT( !commands.empty( ));
-
-        for( ICommandsCIter i = commands.begin(); i != commands.end(); ++i )
-        {
-            // We want to avoid a non-const copy of commands, hence the cast...
-            ICommand& command = const_cast< ICommand& >( *i );
-            if( !command( ))
-            {
-                LBABORT( "Error handling " << command );
-            }
-            if( stopRunning( ))
-                break;
-
-            _commands.pump();
-        }
+                
+        if ( !handleCommands() )
+            break;
     }
 
     _commands.flush();
     LBINFO << "Leaving worker thread " << lunchbox::className( this )
            << std::endl;
+}
+
+template< class Q >
+bool WorkerThread< Q >::handleCommands()
+{
+    if ( _commands.isEmpty( ))
+        return true;
+    
+    const ICommands& commands = _commands.popAll();
+    for( ICommandsCIter i = commands.begin(); i != commands.end(); ++i )
+    {
+        // We want to avoid a non-const copy of commands, hence the cast...
+        ICommand& command = const_cast< ICommand& >( *i );
+        if( !command( ))
+        {
+            LBABORT( "Error handling " << command );
+        }
+        if( stopRunning( ))
+            return false;
+
+        _commands.pump();
+    }
+    return true;
 }
 
 }

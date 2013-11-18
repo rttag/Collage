@@ -70,6 +70,8 @@ namespace detail { class Dispatcher; }
          */
         CO_API virtual bool dispatchCommand( ICommand& command );
 
+        CO_API virtual bool defaultDispatch( ICommand& command );
+
     protected:
         CO_API Dispatcher();
         CO_API Dispatcher( const Dispatcher& from );

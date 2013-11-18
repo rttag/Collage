@@ -73,7 +73,7 @@ typedef CommandHash::const_iterator CommandHashCIter;
 
 namespace detail
 {
-class ReceiverThread : public lunchbox::Thread
+class ReceiverThread : public Worker
 {
 public:
     ReceiverThread( co::LocalNode* localNode ) : _localNode( localNode ) {}
@@ -83,6 +83,7 @@ public:
             return _localNode->_startCommandThread();
         }
     virtual void run() { _localNode->_runReceiverThread(); }
+    void handleReceiverThreadCommands() { handleCommands(); }
 
 private:
     co::LocalNode* const _localNode;
@@ -1173,6 +1174,8 @@ void LocalNode::_runReceiverThread()
             result != ConnectionSet::EVENT_SELECT_ERROR )
 
             nErrors = 0;
+
+        _impl->receiverThread->handleReceiverThreadCommands();        
     }
 
     if( !_impl->pendingCommands.empty( ))
@@ -1416,7 +1419,11 @@ bool LocalNode::dispatchCommand( ICommand& command )
             return true;
 
         case COMMANDTYPE_OBJECT:
-            return _impl->objectStore->dispatchObjectCommand( command );
+            // queue command to default command queue to avoid races
+            command.setDispatchFunction( 
+                CommandFunc<co::ObjectStore>( _impl->objectStore, 
+                    &co::ObjectStore::dispatchObjectCommand ) );
+            return defaultDispatch( command );
 
         default:
             LBABORT( "Unknown command type " << type << " for " << command );
@@ -2029,6 +2036,18 @@ bool LocalNode::_cmdAddConnection( ICommand& command )
 
     _addConnection( connection );
     return true;
+}
+
+bool LocalNode::defaultDispatch( ICommand& command )
+{
+    _getReceiveThreadQueue()->push( command );
+    _impl->incoming.interrupt();
+    return true;
+}
+
+CommandQueue* LocalNode::_getReceiveThreadQueue()
+{
+    return _impl->receiverThread->getWorkerQueue();
 }
 
 }

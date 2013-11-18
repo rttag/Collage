@@ -539,6 +539,9 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
 
         void _dispatchCommand( ICommand& command );
         void   _redispatchCommands();
+        CO_API virtual bool defaultDispatch( ICommand& command );
+        CommandQueue* _getReceiveThreadQueue();
+
 
         /** The command functions. */
         bool _cmdAckRequest( ICommand& command );

@@ -60,6 +60,8 @@ protected:
     /** @return true to indicate pending idle tasks. @version 1.0 */
     virtual bool notifyIdle() { return false; }
 
+    bool handleCommands();
+
 private:
     /** The receiver->worker thread command queue. */
     Q _commands;

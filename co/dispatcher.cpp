@@ -102,16 +102,16 @@ bool Dispatcher::dispatchCommand( ICommand& command )
     }
 #endif
 
+    command.setDispatchFunction( _impl->fTable[ which ] );
     CommandQueue* queue = _impl->qTable[ which ];
     if( queue )
     {
-        command.setDispatchFunction( _impl->fTable[ which ] );
         queue->push( command );
         return true;
     }
     // else
-
-    LBCHECK( _impl->fTable[ which ]( command ));
+    if ( !defaultDispatch( command ) )
+        LBCHECK( command() );
     return true;
 }
 
@@ -120,6 +120,11 @@ bool Dispatcher::_cmdUnknown( ICommand& command )
     LBERROR << "Unknown " << command << " for " << lunchbox::className( this )
             << lunchbox::backtrace << std::endl;
     LBUNREACHABLE;
+    return false;
+}
+
+bool Dispatcher::defaultDispatch( ICommand& /*command*/ )
+{
     return false;
 }
 

@@ -126,14 +126,24 @@ int main( int argc, char **argv )
     command.setType( co::COMMANDTYPE_NODE );
     command.setCommand( co::CMD_NODE_CUSTOM );
 
-    Bar bar;
-    FooBar fooBar;
-    BarFoo barFoo;
+    co::LocalNodePtr bar = new Bar;
+    co::LocalNodePtr fooBar = new FooBar;
+    co::LocalNodePtr barFoo = new BarFoo;
 
-    bar.dispatchCommand( command );
-    fooBar.dispatchCommand( command );
-    barFoo.dispatchCommand ( command );
+    bar->listen();
+    fooBar->listen();
+    barFoo->listen();
+
+    bar->dispatchCommand( command );
+    fooBar->dispatchCommand( command );
+    barFoo->dispatchCommand ( command );
+    
+    lunchbox::sleep(1000);
     TESTINFO( calls == 3, calls );
+
+    barFoo->close();
+    fooBar->close();
+    bar->close();
 
     return EXIT_SUCCESS;
 }
