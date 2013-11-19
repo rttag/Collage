@@ -600,6 +600,9 @@ bool ConnectionSet::_setupFDSet()
          i != _impl->allConnections.end(); ++i )
     {
         ConnectionPtr connection = *i;
+        if ( connection->isRead() )
+            continue;
+
         fd.fd = connection->getNotifier();
 
         if( fd.fd <= 0 )
