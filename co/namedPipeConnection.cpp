@@ -333,8 +333,6 @@ void NamedPipeConnection::readNB( void* buffer, const uint64_t bytes )
 int64_t NamedPipeConnection::readSync( void* buffer, const uint64_t bytes,
                                        const bool ignored )
 {
-    LB_TS_THREAD( _recvThread );
-
     if( _fd == INVALID_HANDLE_VALUE )
     {
         LBERROR << "Invalid read handle" << std::endl;

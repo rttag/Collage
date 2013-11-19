@@ -80,6 +80,7 @@ public:
 
     void flush()
     {
+        lunchbox::ScopedFastWrite lock( _buffer );
         for( DataCIter i = _cache.begin(); i != _cache.end(); ++i )
         {
             co::Buffer* buffer = *i;
@@ -98,6 +99,7 @@ public:
 
     BufferPtr newBuffer()
     {
+        lunchbox::ScopedFastWrite lock( _buffer );
         const uint32_t cacheSize = uint32_t( _cache.size( ));
         LBASSERTINFO( size_t( _free ) <= cacheSize,
                       size_t( _free ) << " > " << cacheSize );
@@ -159,6 +161,7 @@ public:
 
     void compact()
     {
+        lunchbox::ScopedFastWrite lock( _buffer );
         if( _free <= _maxFree )
             return;
 
@@ -198,6 +201,8 @@ private:
 
     const int32_t _minFree;
     int32_t _maxFree; //!< The maximum number of free items
+
+    lunchbox::SpinLock _buffer;
 
     virtual void notifyFree( co::Buffer* )
     {

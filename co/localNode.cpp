@@ -57,6 +57,8 @@ namespace co
 {
 namespace
 {
+#define READWORKER_THREAD_COUNT 4
+
 typedef CommandFunc< LocalNode > CmdFunc;
 typedef std::list< ICommand > CommandList;
 typedef lunchbox::RefPtrHash< Connection, NodePtr > ConnectionNodeHash;
@@ -69,10 +71,66 @@ typedef HandlerHash::const_iterator HandlerHashCIter;
 typedef std::pair< LocalNode::CommandHandler, CommandQueue* > CommandPair;
 typedef stde::hash_map< uint128_t, CommandPair > CommandHash;
 typedef CommandHash::const_iterator CommandHashCIter;
+typedef std::map<Connection*, uint16_t> ConnectionUsageMap;
+
+class ThreadSharedData
+{
+public:
+    bool lock( co::ConnectionPtr conn )
+    {
+        lunchbox::ScopedFastWrite mutex( _map );
+        if ( !_usageMap[conn.get()] )
+            return _usageMap[conn.get()] = 1;
+        return false;
+    }
+
+    void unlock( co::ConnectionPtr conn )
+    {
+        lunchbox::ScopedFastWrite mutex( _map );
+        _usageMap[conn.get()] = 0;
+    }
+
+    lunchbox::MTQueue<co::ConnectionPtr> _workerQueue;
+private:
+    ConnectionUsageMap _usageMap;
+    lunchbox::SpinLock _map;
+
+};
 }
 
 namespace detail
 {
+class ReadWorkerThread : public lunchbox::Thread
+{
+public:
+    ReadWorkerThread( ThreadSharedData& data, co::LocalNode* localNode ) 
+    : _data( data )
+    , _localNode( localNode )
+    {}
+    virtual bool init()
+    {
+        setName( std::string("ReadWorkerThread"));
+        return true;
+    }
+    virtual void run()
+    {
+        while ( true )
+        {
+            co::ConnectionPtr readConnection =  _data._workerQueue.pop();
+            if ( !readConnection )
+                break;
+
+            _localNode->readAndHandleData( readConnection );
+
+
+        }
+        exit();
+    }
+private:
+    ThreadSharedData& _data;
+    co::LocalNode* _localNode;
+};
+
 class ReceiverThread : public Worker
 {
 public:
@@ -80,13 +138,45 @@ public:
     virtual bool init()
         {
             setName( std::string("R ") + lunchbox::className(_localNode));
+            for ( uint16_t i = 0; i < READWORKER_THREAD_COUNT; ++i )
+            {
+                ReadWorkerThread* t = new ReadWorkerThread( _workerThreadData, _localNode );
+                if ( !t->start() )
+                {
+                    LBERROR << "worker thread not starting" << std::endl;
+                    delete t;
+                    return false;
+                }
+                _workerThreads.push_back( t );
+            }
             return _localNode->_startCommandThread();
         }
     virtual void run() { _localNode->_runReceiverThread(); }
     void handleReceiverThreadCommands() { handleCommands(); }
+    void addReadCommand( co::ConnectionPtr connection )
+    {
+        if ( connection )
+            connection->setRead( true );
+        _workerThreadData._workerQueue.push( connection );
+    }
+
+    void stopWorkerThreads()
+    {
+        for ( uint16_t i = 0; i < _workerThreads.size(); ++i )
+        {
+            addReadCommand( co::ConnectionPtr() );
+        }
+        for ( uint16_t i = 0; i < _workerThreads.size(); ++i )
+        {
+            _workerThreads[i]->join();
+        }
+    }
+
 
 private:
     co::LocalNode* const _localNode;
+    std::vector<ReadWorkerThread*> _workerThreads;
+    ThreadSharedData _workerThreadData;
 };
 
 class CommandThread : public Worker
@@ -1048,7 +1138,7 @@ uint32_t LocalNode::_connect( NodePtr node, ConnectionPtr connection )
         << getNodeID() << requestID << getType() << serialize();
 
     bool connected = false;
-    if( !waitRequest( requestID, connected, 10000 /*ms*/ ))
+    if( !waitRequest( requestID, connected ))
     {
         LBWARN << "Node connection handshake timeout - " << node
                << " not a Collage node?" << std::endl;
@@ -1130,7 +1220,7 @@ void LocalNode::_runReceiverThread()
                 break;
 
             case ConnectionSet::EVENT_DATA:
-                _handleData();
+                _enqueueForRead();
                 break;
 
             case ConnectionSet::EVENT_DISCONNECT:
@@ -1183,6 +1273,9 @@ void LocalNode::_runReceiverThread()
                << " commands pending while leaving command thread" << std::endl;
 
     _impl->pendingCommands.clear();
+    
+    _impl->receiverThread->stopWorkerThreads();
+
     LBCHECK( _impl->commandThread->join( ));
 
     ConnectionPtr connection = getConnection();
@@ -1228,9 +1321,10 @@ void LocalNode::_handleConnect()
 
 void LocalNode::_handleDisconnect()
 {
-    while( _handleData( )) ; // read remaining data off connection
-
     ConnectionPtr connection = _impl->incoming.getConnection();
+
+    // read remaining data off connection
+    while( readAndHandleData( connection ));
     ConnectionNodeHash::iterator i = _impl->connectionNodes.find( connection );
 
     if( i != _impl->connectionNodes.end( ))
@@ -1252,12 +1346,18 @@ void LocalNode::_handleDisconnect()
     _removeConnection( connection );
 }
 
-bool LocalNode::_handleData()
+bool LocalNode::_enqueueForRead()
 {
     _impl->smallBuffers.compact();
     _impl->bigBuffers.compact();
 
-    ConnectionPtr connection = _impl->incoming.getConnection();
+    _impl->receiverThread->addReadCommand( _impl->incoming.getConnection());
+
+    return true;
+}
+
+bool LocalNode::readAndHandleData( ConnectionPtr connection )
+{
     LBASSERT( connection );
 
     BufferPtr buffer = _readHead( connection );
@@ -1272,14 +1372,18 @@ bool LocalNode::_handleData()
     BufferPtr nextBuffer = _impl->smallBuffers.alloc( COMMAND_ALLOCSIZE );
     connection->recvNB( nextBuffer, COMMAND_MINSIZE );
 
+    connection->setRead( false );
+
     if( gotCommand )
     {
+        command.setConnection( connection );
         _dispatchCommand( command );
-        return true;
     }
+    else
+        LBERROR << "Incomplete command read: " << command << std::endl;
 
-    LBERROR << "Incomplete command read: " << command << std::endl;
-    return false;
+    _impl->incoming.interrupt();
+    return gotCommand;
 }
 
 BufferPtr LocalNode::_readHead( ConnectionPtr connection )
@@ -1567,7 +1671,7 @@ bool LocalNode::_cmdConnect( ICommand& command )
     LBVERB << "handle connect " << command << " req " << requestID << " type "
            << nodeType << " data " << data << std::endl;
 
-    ConnectionPtr connection = _impl->incoming.getConnection();
+    ConnectionPtr connection = command.getConnection();
 
     LBASSERT( nodeID != getNodeID() );
     LBASSERT( _impl->connectionNodes.find( connection ) ==
@@ -1635,7 +1739,7 @@ bool LocalNode::_cmdConnectReply( ICommand& command )
     LBASSERT( !command.getNode( ));
     LBASSERT( _impl->inReceiverThread( ));
 
-    ConnectionPtr connection = _impl->incoming.getConnection();
+    ConnectionPtr connection = command.getConnection();
     LBASSERT( _impl->connectionNodes.find( connection ) ==
               _impl->connectionNodes.end( ));
 
@@ -1742,7 +1846,7 @@ bool LocalNode::_cmdID( ICommand& command )
 
     LBINFO << "handle ID " << command << " node " << nodeID << std::endl;
 
-    ConnectionPtr connection = _impl->incoming.getConnection();
+    ConnectionPtr connection = command.getConnection();
     LBASSERT( connection->isMulticast( ));
     LBASSERT( _impl->connectionNodes.find( connection ) ==
               _impl->connectionNodes.end( ));

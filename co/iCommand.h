@@ -99,6 +99,9 @@ namespace detail { class ICommand; }
 
         /** @internal Invoke and clear the command function. */
         CO_API bool operator()();
+
+        void setConnection( co::ConnectionPtr connection );
+        co::ConnectionPtr getConnection();
         //@}
 
     private:

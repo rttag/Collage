@@ -248,6 +248,9 @@ namespace detail { class Connection; }
         /** @return the notifier signaling events. @version 1.0 */
         virtual Notifier getNotifier() const = 0;
 
+        bool isRead();
+        void setRead( bool flag );
+
     protected:
         /** Construct a new connection. */
         Connection();

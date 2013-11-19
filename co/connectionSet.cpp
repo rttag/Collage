@@ -517,15 +517,15 @@ ConnectionSet::Event ConnectionSet::_getSelectResult( const uint32_t )
 
 bool ConnectionSet::_setupFDSet()
 {
-    if( !_impl->dirty )
-    {
-#ifndef _WIN32
-        // TODO: verify that poll() really modifies _fdSet, and remove the copy
-        // if it doesn't. The man page seems to hint that poll changes fds.
-        _impl->fdSet = _impl->fdSetCopy;
-#endif
-        return true;
-    }
+//    if( !_impl->dirty )
+//    {
+//#ifndef _WIN32
+//        // TODO: verify that poll() really modifies _fdSet, and remove the copy
+//        // if it doesn't. The man page seems to hint that poll changes fds.
+//        _impl->fdSet = _impl->fdSetCopy;
+//#endif
+//        return true;
+//    }
 
     _impl->dirty = false;
     _impl->fdSet.setSize( 0 );
@@ -547,6 +547,9 @@ bool ConnectionSet::_setupFDSet()
          i != _impl->connections.end(); ++i )
     {
         ConnectionPtr connection = *i;
+        if ( connection->isRead() )
+            continue;
+
         readHandle = connection->getNotifier();
 
         if( !readHandle )

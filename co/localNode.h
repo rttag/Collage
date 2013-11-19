@@ -467,6 +467,8 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
          */
         CO_API void setAffinity( const int32_t affinity );
 
+        bool readAndHandleData( co::ConnectionPtr connection );
+
     protected:
         /** @internal
          * Connect a node proxy to this node.
@@ -522,7 +524,7 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
         void _runReceiverThread();
         void   _handleConnect();
         void   _handleDisconnect();
-        bool   _handleData();
+        bool   _enqueueForRead();
         BufferPtr _readHead( ConnectionPtr connection );
         ICommand   _setupCommand( ConnectionPtr, ConstBufferPtr );
         bool      _readTail( ICommand&, BufferPtr, ConnectionPtr );

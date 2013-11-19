@@ -452,8 +452,6 @@ void SocketConnection::readNB( void* buffer, const uint64_t bytes )
 int64_t SocketConnection::readSync( void* buffer, const uint64_t bytes,
                                     const bool block )
 {
-    LB_TS_THREAD( _recvThread );
-
     if( _readFD == INVALID_SOCKET )
     {
         LBERROR << "Invalid read handle" << std::endl;
