@@ -1372,15 +1372,15 @@ bool LocalNode::readAndHandleData( ConnectionPtr connection )
     BufferPtr nextBuffer = _impl->smallBuffers.alloc( COMMAND_ALLOCSIZE );
     connection->recvNB( nextBuffer, COMMAND_MINSIZE );
 
-    connection->setRead( false );
-
     if( gotCommand )
     {
         command.setConnection( connection );
-        _dispatchCommand( command );
+        dispatchCommand( command );
     }
     else
         LBERROR << "Incomplete command read: " << command << std::endl;
+
+    connection->setRead( false );
 
     _impl->incoming.interrupt();
     return gotCommand;
@@ -1497,17 +1497,18 @@ BufferPtr LocalNode::allocBuffer( const uint64_t size )
     return buffer;
 }
 
-void LocalNode::_dispatchCommand( ICommand& command )
+bool LocalNode::_dispatchCommand( ICommand& command )
 {
     LBASSERTINFO( command.isValid(), command );
 
-    if( dispatchCommand( command ))
+    if( _impl->objectStore->dispatchObjectCommand( command ))
         _redispatchCommands();
     else
     {
         _redispatchCommands();
         _impl->pendingCommands.push_back( command );
     }
+    return true;
 }
 
 bool LocalNode::dispatchCommand( ICommand& command )
@@ -1524,10 +1525,10 @@ bool LocalNode::dispatchCommand( ICommand& command )
 
         case COMMANDTYPE_OBJECT:
             // queue command to default command queue to avoid races
-            command.setDispatchFunction( 
-                CommandFunc<co::ObjectStore>( _impl->objectStore, 
-                    &co::ObjectStore::dispatchObjectCommand ) );
-            return defaultDispatch( command );
+            command.setDispatchFunction( CommandFunc<co::LocalNode>( 
+                                         this, &LocalNode::_dispatchCommand ));
+            defaultDispatch( command );
+            return true;
 
         default:
             LBABORT( "Unknown command type " << type << " for " << command );
@@ -1548,7 +1549,7 @@ void LocalNode::_redispatchCommands()
             ICommand& command = *i;
             LBASSERT( command.isValid( ));
 
-            if( dispatchCommand( command ))
+            if( _impl->objectStore->dispatchObjectCommand( command ))
             {
                 _impl->pendingCommands.erase( i );
                 changes = true;
@@ -1637,7 +1638,8 @@ bool LocalNode::_cmdStopRcv( ICommand& command )
     _setClosing(); // causes rcv thread exit
 
     command.setCommand( CMD_NODE_STOP_CMD ); // causes cmd thread exit
-    _dispatchCommand( command );
+    dispatchCommand( command );
+    _redispatchCommands();
     return true;
 }
 
