@@ -186,7 +186,10 @@ private:
 }
 
 ConnectionSet::ConnectionSet()
-        : _impl( new detail::ConnectionSet )
+: _impl( new detail::ConnectionSet )
+, _isThreadMode(false)
+, _needRebalance(false)
+, _lastIdx(0)
 {}
 ConnectionSet::~ConnectionSet()
 {
@@ -231,6 +234,101 @@ void ConnectionSet::interrupt()
     _impl->interrupt();
 }
 
+
+#ifdef _WIN32
+
+struct ThreadConnectionsSizeComparator 
+{
+    bool operator () ( const Thread* lhs, const Thread* rhs) 
+    {
+        return lhs->set.getConnections().size() 
+             < rhs->set.getConnections().size();
+    }
+};
+
+void ConnectionSet::_rebalanceThreads() 
+{
+    lunchbox::ScopedWrite mutex( _impl->lock );
+    if (_impl->threads.size() <= 1)
+    {
+        _needRebalance = false;
+        return;
+    }
+    Thread* maxThread = *( std::max_element(_impl->threads.begin(), 
+                           _impl->threads.end(), 
+                           ThreadConnectionsSizeComparator()) );
+    Thread* minThread = *( std::min_element(_impl->threads.begin(), 
+                           _impl->threads.end(), 
+                           ThreadConnectionsSizeComparator()) );
+
+    if (maxThread->set._impl->connections.size() 
+        - minThread->set._impl->connections.size() <= 1)
+    {
+        _needRebalance = false;
+        return;
+    }
+    
+    ConnectionPtr lastConnection = maxThread->set._impl->connections.back();
+    minThread->set.addConnection( lastConnection );
+    maxThread->set.removeConnection( lastConnection );
+}
+
+
+void ConnectionSet::_createThread( const Connections& connections )
+{
+    Thread* thread = new Thread( this );
+    for ( ConnectionsCIter it = connections.begin(); 
+          it != connections.end(); 
+          ++it )
+    {
+        ConnectionPtr connection = *it;
+        thread->set.addConnection( connection );
+    }
+
+    _impl->threads.push_back( thread );
+    thread->start();
+}
+
+void ConnectionSet::_addConnectionToThread( ConnectionPtr connection )
+{
+    _needRebalance = true;
+    lunchbox::ScopedWrite mutex( _impl->lock );
+    if ( _impl->threads.size() > 0 ) 
+    {
+        Thread* minThread = *( std::min_element(_impl->threads.begin(), 
+                               _impl->threads.end(), 
+                               ThreadConnectionsSizeComparator()) );
+        
+        if ( minThread->set._impl->connections.size() < MAX_CONNECTIONS )
+            minThread->set.addConnection( connection );    
+        else 
+        {
+            Connections connections(1, connection);
+            _createThread( connections );
+        }
+            
+    }
+    else 
+    {
+        _isThreadMode = true;
+        size_t mid_connections = _impl->connections.size()/2;
+        Connections connections1(_impl->connections.begin(), 
+                                 _impl->connections.begin() + mid_connections );
+        Connections connections2(_impl->connections.begin() + mid_connections, 
+                                 _impl->connections.end() );
+        connections1.push_back( connection );
+        while( !_impl->connections.empty() ) 
+        {
+            ConnectionPtr lastConnection = _impl->connections.back();
+            lastConnection->removeListener( _impl );
+            _impl->connections.pop_back();
+        }
+        _createThread( connections1 );
+        _createThread( connections2 );
+    }
+}
+#endif
+
 void ConnectionSet::addConnection( ConnectionPtr connection )
 {
     LBASSERT( connection->isConnected() || connection->isListening( ));
@@ -242,35 +340,14 @@ void ConnectionSet::addConnection( ConnectionPtr connection )
 #ifdef _WIN32
         LBASSERT( _impl->allConnections.size() <
                   MAX_CONNECTIONS * MAX_CONNECTIONS );
-        if( _impl->connections.size() < MAX_CONNECTIONS - _impl->threads.size())
+        if ( !_isThreadMode && _impl->connections.size() < MAX_CONNECTIONS )
         {
-            // can handle it ourself
             _impl->connections.push_back( connection );
-            connection->addListener( _impl );
         }
-        else
+        else 
         {
-            // add to existing thread
-            for( ThreadsCIter i = _impl->threads.begin();
-                 i != _impl->threads.end(); ++i )
-            {
-                Thread* thread = *i;
-                if( thread->set._impl->connections.size() > MAX_CONNECTIONS )
-                    continue;
-
-                thread->set.addConnection( connection );
-                return;
-            }
-
-            // add to new thread
-            Thread* thread = new Thread( this );
-            thread->set.addConnection( connection );
-            thread->set.addConnection( _impl->connections.back( ));
-            _impl->connections.pop_back();
-
-            _impl->threads.push_back( thread );
-            thread->start();
-        }
+            _addConnectionToThread( connection );
+        } 
 #else
         connection->addListener( _impl );
 
@@ -314,9 +391,9 @@ bool ConnectionSet::removeConnection( ConnectionPtr connection )
                     break;
                 }
             }
-
-            LBASSERT( k != _impl->threads.end( ));
-            _impl->threads.erase( k );
+            
+            if ( k != _impl->threads.end() )
+                _impl->threads.erase( k );
         }
         else
         {
@@ -434,8 +511,13 @@ ConnectionSet::Event ConnectionSet::select( const uint32_t timeout )
                         _impl->selfConnection->reset();
                         return EVENT_INTERRUPT;
                     }
-                    if( event == EVENT_DATA && _impl->connection->isListening())
+                    if( event == EVENT_DATA &&_impl->connection->isListening())
                         event = EVENT_CONNECT;
+#ifdef _WIN32
+                    if ( _isThreadMode && _needRebalance )
+                        _rebalanceThreads();
+#endif
+                    _rotateFDSet();
                     return event;
                 }
         }
@@ -453,7 +535,7 @@ ConnectionSet::Event ConnectionSet::_getSelectResult( const uint32_t index )
     // WAR: Catch this and ignore the result, this seems to have no side-effects
     if( i >= _impl->fdSetResult.getSize( ))
         return EVENT_NONE;
-
+    _lastIdx = i;
     if( i > _impl->connections.size( ))
     {
         _impl->thread = _impl->fdSetResult[i].thread;
@@ -487,6 +569,7 @@ ConnectionSet::Event ConnectionSet::_getSelectResult( const uint32_t )
         _impl->connection = _impl->fdSetResult[i].connection;
         LBASSERT( _impl->connection.isValid( ));
 
+        _lastIdx = static_cast<uint32_t>(i);
         LBVERB << "Got event on connection @" << (void*)_impl->connection.get()
                << std::endl;
 
@@ -514,6 +597,27 @@ ConnectionSet::Event ConnectionSet::_getSelectResult( const uint32_t )
     return EVENT_NONE;
 }
 #endif // else not _WIN32
+
+void ConnectionSet::_rotateFDSet() 
+{
+    if ( _impl->dirty )
+        return;
+    lunchbox::ScopedWrite mutex( _impl->lock );
+    LBASSERT( _lastIdx );
+    uint32_t rotateIdx = std::min( _lastIdx, 
+                         static_cast<uint32_t>( _impl->fdSet.getSize() - 1 ) );
+    std::rotate( _impl->fdSet.getData() + 1, 
+                 _impl->fdSet.getData() + rotateIdx, 
+                 _impl->fdSet.getData() + _impl->fdSet.getSize() );
+    std::rotate( _impl->fdSetResult.getData() + 1, 
+                 _impl->fdSetResult.getData() + rotateIdx, 
+                 _impl->fdSetResult.getData() + _impl->fdSetResult.getSize() );
+#ifndef _WIN32
+    std::rotate( _impl->fdSetCopy.getData() + 1, 
+                 _impl->fdSetCopy.getData() + rotateIdx, 
+                 _impl->fdSetCopy.getData() + _impl->fdSetCopy.getSize() );
+#endif
+}
 
 bool ConnectionSet::_setupFDSet()
 {

@@ -1,4 +1,3 @@
-
 /* Copyright (c) 2005-2012, Stefan Eilemann <eile@equalizergraphics.com>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
@@ -114,7 +113,15 @@ namespace detail { class ConnectionSet; }
         void _clear();
         bool _setupFDSet();
         bool _buildFDSet();
-
+#ifdef _WIN32
+		void _createThread( const Connections& connection );
+		void _addConnectionToThread( ConnectionPtr connection );
+		void _rebalanceThreads();
+#endif		
+		void _rotateFDSet();
+		bool _isThreadMode;
+		bool _needRebalance;
+		uint32_t _lastIdx;
         Event _getSelectResult( const uint32_t index );
         LB_TS_VAR( _selectThread );
     };
