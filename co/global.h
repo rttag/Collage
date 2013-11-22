@@ -101,6 +101,7 @@ namespace co
             IATTR_ROBUSTNESS,            //!< @internal use robustness
             IATTR_TIMEOUT_DEFAULT,       //!< @internal default timeout
             IATTR_OBJECT_COMPRESSION,    //!< @internal threshold to compress
+            IATTR_READ_THREAD_COUNT,     //!< @internal number of read threads
             IATTR_ALL
         };
 

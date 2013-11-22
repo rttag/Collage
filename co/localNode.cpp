@@ -57,8 +57,6 @@ namespace co
 {
 namespace
 {
-#define READWORKER_THREAD_COUNT 4
-
 typedef CommandFunc< LocalNode > CmdFunc;
 typedef std::list< ICommand > CommandList;
 typedef lunchbox::RefPtrHash< Connection, NodePtr > ConnectionNodeHash;
@@ -138,9 +136,12 @@ public:
     virtual bool init()
         {
             setName( std::string("R ") + lunchbox::className(_localNode));
-            for ( uint16_t i = 0; i < READWORKER_THREAD_COUNT; ++i )
+            const int32_t nThreads = 
+                    Global::getIAttribute( Global::IATTR_READ_THREAD_COUNT );
+            for ( int16_t i = 0; i < nThreads ; ++i )
             {
-                ReadWorkerThread* t = new ReadWorkerThread( _workerThreadData, _localNode );
+                ReadWorkerThread* t = 
+                        new ReadWorkerThread( _workerThreadData, _localNode );
                 if ( !t->start() )
                 {
                     LBERROR << "worker thread not starting" << std::endl;
