@@ -81,7 +81,8 @@ public:
         connectionDescriptions;
 
     /** Last time commands were received */
-    int64_t lastReceive;
+    // w: read threads, r: all
+    lunchbox::Lockable< int64_t, lunchbox::SpinLock > lastReceive;
 
     /** Is a big endian host? */
     bool bigEndian;
@@ -358,7 +359,8 @@ const NodeID& Node::getNodeID() const
 
 int64_t Node::getLastReceiveTime() const
 {
-    return _impl->lastReceive;
+    lunchbox::ScopedFastRead mutex( _impl->lastReceive );
+    return *_impl->lastReceive;
 }
 
 uint32_t Node::getType() const
@@ -517,6 +519,7 @@ void Node::_disconnect()
 
 void Node::_setLastReceive( const int64_t time )
 {
+    lunchbox::ScopedFastWrite mutex( _impl->lastReceive );
     _impl->lastReceive = time;
 }
 
