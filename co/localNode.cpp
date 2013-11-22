@@ -223,7 +223,7 @@ public:
     ~LocalNode()
         {
             LBASSERT( incoming.isEmpty( ));
-            LBASSERT( connectionNodes.empty( ));
+            LBASSERT( connectionNodes->empty( ));
             LBASSERT( pendingCommands.empty( ));
             LBASSERT( nodes->empty( ));
 
@@ -636,8 +636,8 @@ void LocalNode::_closeNode( NodePtr node )
 
     if( connection )
     {
-        LBASSERTINFO( _impl->connectionNodes.find( connection ) !=
-                      _impl->connectionNodes.end(), connection );
+        LBASSERTINFO( _impl->connectionNodes->find( connection ) !=
+                      _impl->connectionNodes->end(), connection );
 
         _removeConnection( connection );
         lunchbox::ScopedFastWrite mutex( _impl->connectionNodes );
@@ -668,8 +668,8 @@ bool LocalNode::_connectSelf()
 
     // add to connection set
     LBASSERT( connection->getDescription().isValid( ));
-    LBASSERT( _impl->connectionNodes.find( connection ) ==
-              _impl->connectionNodes.end( ));
+    LBASSERT( _impl->connectionNodes->find( connection ) ==
+              _impl->connectionNodes->end( ));
 
     (*_impl->connectionNodes)[ connection ] = this;
     _impl->nodes.data[ getNodeID() ] = this;
@@ -1686,8 +1686,8 @@ bool LocalNode::_cmdConnect( ICommand& command )
     ConnectionPtr connection = command.getConnection();
 
     LBASSERT( nodeID != getNodeID() );
-    LBASSERT( _impl->connectionNodes.find( connection ) ==
-              _impl->connectionNodes.end( ));
+    LBASSERT( _impl->connectionNodes->find( connection ) ==
+              _impl->connectionNodes->end( ));
 
     NodePtr peer;
 #ifdef COLLAGE_BIGENDIAN
@@ -1866,8 +1866,8 @@ bool LocalNode::_cmdID( ICommand& command )
 
     ConnectionPtr connection = command.getConnection();
     LBASSERT( connection->isMulticast( ));
-    LBASSERT( _impl->connectionNodes.find( connection ) ==
-              _impl->connectionNodes.end( ));
+    LBASSERT( _impl->connectionNodes->find( connection ) ==
+              _impl->connectionNodes->end( ));
 
     NodePtr node;
     if( nodeID == getNodeID() ) // 'self' multicast connection
@@ -2097,8 +2097,8 @@ bool LocalNode::_cmdRemoveListener( ICommand& command )
         _removeMulticast( connection );
 
     _impl->incoming.removeConnection( connection );
-    LBASSERT( _impl->connectionNodes.find( connection ) !=
-              _impl->connectionNodes.end( ));
+    LBASSERT( _impl->connectionNodes->find( connection ) !=
+              _impl->connectionNodes->end( ));
     {
         lunchbox::ScopedFastWrite mutex( _impl->connectionNodes );
         _impl->connectionNodes->erase( connection );
