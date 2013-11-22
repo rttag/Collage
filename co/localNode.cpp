@@ -78,7 +78,7 @@ public:
     {
         lunchbox::ScopedFastWrite mutex( _map );
         if ( !_usageMap[conn.get()] )
-            return _usageMap[conn.get()] = 1;
+            return ( _usageMap[conn.get()] = 1 );
         return false;
     }
 
