@@ -103,6 +103,8 @@ namespace co
             IATTR_OBJECT_COMPRESSION,    //!< @internal threshold to compress
             IATTR_CMD_QUEUE_LIMIT,     //!< @internal max cmd thread q size/1024
             IATTR_READ_THREAD_COUNT,     //!< @internal number of read threads
+            IATTR_TCP_RECV_BUFFER_SIZE,//!< @internal socketopt recv buffer size
+            IATTR_TCP_SEND_BUFFER_SIZE,//!< @internal socketopt send buffer size
             IATTR_ALL
         };
 

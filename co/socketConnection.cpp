@@ -618,13 +618,15 @@ void SocketConnection::_tuneSocket( const Socket fd )
     setsockopt( fd, SOL_SOCKET, SO_REUSEADDR,
                 reinterpret_cast<const char*>( &on ), sizeof( on ));
 
-#ifdef _WIN32
-    const int size = 128768;
-    setsockopt( fd, SOL_SOCKET, SO_RCVBUF,
-                reinterpret_cast<const char*>( &size ), sizeof( size ));
-    setsockopt( fd, SOL_SOCKET, SO_SNDBUF,
-                reinterpret_cast<const char*>( &size ), sizeof( size ));
-#endif
+    const int rcv = Global::getIAttribute( Global::IATTR_TCP_RECV_BUFFER_SIZE );
+    const int snd = Global::getIAttribute( Global::IATTR_TCP_SEND_BUFFER_SIZE );
+
+    if ( rcv != 0 )
+        setsockopt( fd, SOL_SOCKET, SO_RCVBUF,
+                reinterpret_cast<const char*>( &rcv ), sizeof( rcv ));
+    if ( snd != 0 )
+        setsockopt( fd, SOL_SOCKET, SO_SNDBUF,
+                reinterpret_cast<const char*>( &snd ), sizeof( snd ));
 }
 
 //----------------------------------------------------------------------

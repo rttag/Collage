@@ -95,7 +95,14 @@ int32_t     _iAttributes[Global::IATTR_ALL] =
     _getTimeout(), // IATTR_TIMEOUT_DEFAULT
     1023,   // IATTR_OBJECT_COMPRESSION
     0,      // IATTR_CMD_QUEUE_LIMIT
-    4       // IATTR_READ_THREAD_COUNT
+    4,      // IATTR_READ_THREAD_COUNT
+#ifdef _WIN32
+    65536,  // IATTR_TCP_RECV_BUFFER_SIZE
+    131072  // IATTR_TCP_SEND_BUFFER_SIZE
+#else
+    0,      // IATTR_TCP_RECV_BUFFER_SIZE
+    0       // IATTR_TCP_SEND_BUFFER_SIZE
+#endif
 };
 }
 
