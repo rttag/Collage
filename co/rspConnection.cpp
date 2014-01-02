@@ -1555,8 +1555,14 @@ void RSPConnection::_removeConnection( const uint16_t id )
             break;
         }
     }
-
-    _sendCountNode();
+    if( _children.size() == 1 ) 
+    {
+        //as there will be no acks anymore, finish the write to free the buffers
+        LBASSERT( _children.front()->_id == _id );
+        _finishWriteQueue( _sequence - 1 );
+    }
+    else
+        _sendCountNode();
 }
 
 int64_t RSPConnection::write( const void* inData, const uint64_t bytes )
