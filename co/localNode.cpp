@@ -153,7 +153,7 @@ public:
             return _localNode->_startCommandThread();
         }
     virtual void run() { _localNode->_runReceiverThread(); }
-    void handleReceiverThreadCommands() { handleCommands(); }
+    void handleReceiverThreadCommands() { handleCommands( false ); }
     void addReadCommand( co::ConnectionPtr connection )
     {
         if ( connection )

@@ -30,7 +30,7 @@ template< class Q > void WorkerThread< Q >::run()
             if( !notifyIdle( )) // nothing to do
                 break;
                 
-        if ( !handleCommands() )
+        if ( !handleCommands( true ) )
             break;
     }
 
@@ -40,9 +40,9 @@ template< class Q > void WorkerThread< Q >::run()
 }
 
 template< class Q >
-bool WorkerThread< Q >::handleCommands()
+bool WorkerThread< Q >::handleCommands( bool blocking )
 {
-    if ( _commands.isEmpty( ))
+    if ( !blocking && _commands.isEmpty( ))
         return true;
     
     const ICommands& commands = _commands.popAll();
