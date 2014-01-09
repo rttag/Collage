@@ -85,6 +85,9 @@ int32_t     _iAttributes[Global::IATTR_ALL] =
     17,    // RSP_ACK_FREQUENCY
     1470,  // UDP_MTU
 #endif
+#ifdef RSP_RELIABILITY_TEST
+    0,     // IATTR_RSP_SIMULATE_PACKET_DROP_PERCENT
+#endif
     524288, // UDP_BUFFER_SIZE
     1,      // QUEUE_MIN_SIZE
     1,      // QUEUE_REFILL

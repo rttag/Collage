@@ -92,6 +92,9 @@ RSPConnection::RSPConnection()
     , _sequence( 0 )
     , _maxTimeouts( Global::getTimeout() / 
                      Global::getIAttribute( Global::IATTR_RSP_ACK_TIMEOUT ) )
+#ifdef RSP_RELIABILITY_TEST
+    , _simPacketDrop( Global::getIAttribute( Global::IATTR_RSP_SIMULATE_PACKET_DROP_PERCENT ) )
+#endif
 {
     _buildNewID();
     ConnectionDescriptionPtr description = _getDescription();
@@ -1075,14 +1078,32 @@ bool RSPConnection::_handleData( const size_t bytes )
     }
     LBASSERT( connection->_id == writerID );
 
+
     const uint16_t sequence = datagram.sequence;
 //  LBLOG( LOG_RSP ) << "rcvd " << sequence << " from " << writerID <<std::endl;
+
+#ifdef RSP_RELIABILITY_TEST
+    // only for test - simulate packet drop
+    if (_simPacketDrop > 0)
+    {
+        if ((_rng.get< float >( ) * 100) < _simPacketDrop)
+        {
+            // we randomly drop a packet
+            LBWARN << "Test - dropping packet sequence " << sequence << std::endl;
+            return true;
+        }
+    }
+#endif
+
 
     if( connection->_sequence == sequence ) // in-order packet
     {
         Buffer* newBuffer = connection->_newDataBuffer( _recvBuffer );
         if( !newBuffer ) // no more data buffers, drop packet
+        {
+            LBLOG( LOG_RSP ) << "No buffers available for receiving - dropping packet sequence " << sequence << std::endl;
             return true;
+        }
 
         lunchbox::ScopedWrite mutex( connection->_mutexEvent );
         connection->_pushDataBuffer( newBuffer );
@@ -1131,7 +1152,10 @@ bool RSPConnection::_handleData( const size_t bytes )
 
     Buffer* newBuffer = connection->_newDataBuffer( _recvBuffer );
     if( !newBuffer ) // no more data buffers, drop packet
+    {
+        LBLOG( LOG_RSP ) << "No buffers available for receiving - dropping packet sequence " << sequence << std::endl;
         return true;
+    }
 
     if( connection->_recvBuffers.size() < size )
         connection->_recvBuffers.resize( size, 0 );
@@ -1589,6 +1613,7 @@ int64_t RSPConnection::write( const void* inData, const uint64_t bytes )
         //ensure timeout occurs after handleConnectedTimeout
         const unsigned timeout = Global::getTimeout() == LB_TIMEOUT_INDEFINITE ?
                             LB_TIMEOUT_INDEFINITE : Global::getTimeout() + 1000;
+
         if ( !_appBuffers.timedPop( timeout, buffer ) )
         {
             LBERROR << "Timeout while writing" << std::endl;

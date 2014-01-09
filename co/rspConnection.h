@@ -30,6 +30,10 @@
 #include <lunchbox/lfQueue.h> // member
 #include <lunchbox/mtQueue.h> // member
 
+#ifdef RSP_RELIABILITY_TEST
+#include <lunchbox/rng.h>
+#endif
+
 #pragma warning(push)
 #pragma warning(disable: 4267)
 #include <boost/asio.hpp>
@@ -292,6 +296,11 @@ namespace co
 
         typedef std::deque< Nack > RepeatQueue;
         RepeatQueue _repeatQueue; //!< nacks to repeat
+
+#ifdef RSP_RELIABILITY_TEST
+        uint32_t _simPacketDrop;    //!< use for test to simulate packet drop in RSP
+        lunchbox::RNG _rng;
+#endif
 
         const uint32_t _maxTimeouts;
 

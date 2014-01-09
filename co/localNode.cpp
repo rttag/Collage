@@ -1161,7 +1161,7 @@ uint32_t LocalNode::_connect( NodePtr node, ConnectionPtr connection )
 
 NodePtr LocalNode::createNode( const uint32_t type )
 {
-    LBASSERTINFO( type == NODETYPE_NODE, type );
+    //LBASSERTINFO( type == NODETYPE_NODE, type );
     return new Node( type );
 }
 

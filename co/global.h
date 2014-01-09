@@ -92,6 +92,9 @@ namespace co
             IATTR_RSP_NUM_BUFFERS,       //!< @internal data buffers
             IATTR_RSP_ACK_FREQUENCY,     //!< @internal reader ack interval
             IATTR_UDP_MTU,               //!< @internal max send size on UDP
+#ifdef RSP_RELIABILITY_TEST
+            IATTR_RSP_SIMULATE_PACKET_DROP_PERCENT,     //!< @internal simulate packet drop
+#endif
             IATTR_UDP_BUFFER_SIZE,       //!< @internal send/receiver buffer
             IATTR_TILE_QUEUE_MIN_SIZE,   //!< @internal (tile) queue min size
             IATTR_TILE_QUEUE_REFILL,     //!< @internal (tile) queue refill size
