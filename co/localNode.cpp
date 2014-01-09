@@ -153,7 +153,7 @@ public:
             return _localNode->_startCommandThread();
         }
     virtual void run() { _localNode->_runReceiverThread(); }
-    void handleReceiverThreadCommands() { handleCommands(); }
+    void handleReceiverThreadCommands() { handleCommands( false ); }
     void addReadCommand( co::ConnectionPtr connection )
     {
         if ( connection )
@@ -1330,6 +1330,8 @@ void LocalNode::_handleDisconnect()
     ConnectionPtr connection = _impl->incoming.getConnection();
 
     // read remaining data off connection
+    if ( connection )
+        connection->setRead( true );
     while( readAndHandleData( connection ));
     ConnectionNodeHash::iterator i = _impl->connectionNodes->find( connection );
 
@@ -1368,7 +1370,10 @@ bool LocalNode::readAndHandleData( ConnectionPtr connection )
 
     BufferPtr buffer = _readHead( connection );
     if( !buffer ) // fluke signal
+    {
+        connection->setRead( false );
         return false;
+    }
 
     ICommand command = _setupCommand( connection, buffer );
     const bool gotCommand = _readTail( command, buffer, connection );
