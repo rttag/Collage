@@ -80,7 +80,7 @@ void EventConnection::set()
     SetEvent( _event );
 #else
     lunchbox::ScopedMutex<> mutex( _lock );
-    if( _set )
+    if( _connection == 0 || _set )
         return;
 
     const char c = 42;
