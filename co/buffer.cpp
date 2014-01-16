@@ -54,11 +54,6 @@ void Buffer::notifyFree()
         _impl->listener->notifyFree( this );
 }
 
-lunchbox::SpinLock& Buffer::getLock() const
-{
-    return _impl->listener->getLock();
-}
-
 std::ostream& operator << ( std::ostream& os, const Buffer& buffer )
 {
     os << lunchbox::disableFlush << "Buffer[" << buffer.getRefCount() << "@"

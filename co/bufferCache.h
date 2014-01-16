@@ -51,8 +51,6 @@ namespace detail { class BufferCache; }
         /** Flush all allocated buffers. */
         void flush();
 
-        lunchbox::SpinLock& getLock() const;
-
     private:
         detail::BufferCache* const _impl;
         friend std::ostream& operator << ( std::ostream&, const BufferCache& );

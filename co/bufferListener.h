@@ -29,8 +29,6 @@ namespace co
         virtual ~BufferListener() {}
 
         virtual void notifyFree( Buffer* ) = 0; //!< No references left
-
-        virtual lunchbox::SpinLock& getLock() const = 0;
     };
 }
 

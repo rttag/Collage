@@ -52,22 +52,8 @@ public:
         , consumed( false )
     {}
 
-    ~ICommand()
-    {
-        if ( buffer )
-        {
-            lunchbox::ScopedFastWrite mutex( buffer->getLock());
-            buffer = 0;
-        }
-    }
-    
     void clear()
     {
-        if ( buffer )
-        {
-            lunchbox::ScopedFastWrite mutex( buffer->getLock());
-            buffer = 0;
-        }
         *this = ICommand();
     }
 

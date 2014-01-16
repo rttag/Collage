@@ -168,37 +168,26 @@ public:
         for( Data::iterator i = _cache.begin(); i != _cache.end(); )
         {
             const co::Buffer* cmd = *i;
-            _delLock.set();
             if( cmd->isFree( ))
             {
                 LBASSERT( _free > 0 );
 #  ifdef PROFILE
                 ++_frees;
 #  endif
-                delete cmd;
-                _delLock.unset();
                 i = _cache.erase( i );
+                delete cmd;
 
                 if( --_free <= target )
                     break;
             }
             else
-            {
-                _delLock.unset();
                 ++i;
-            }
         }
 
         const int32_t num = int32_t( _cache.size() >> _maxFreeShift );
         _maxFree = LB_MAX( _minFree, num );
         _position = _cache.begin();
     }
-
-    lunchbox::SpinLock& getLock() const
-    {
-        return _delLock;
-    }
-
 
 private:
     friend std::ostream& co::operator << (std::ostream&,const co::BufferCache&);
@@ -209,8 +198,6 @@ private:
 
     const int32_t _minFree;
     int32_t _maxFree; //!< The maximum number of free items
-
-    mutable lunchbox::SpinLock _delLock;
 
     virtual void notifyFree( co::Buffer* )
     {
