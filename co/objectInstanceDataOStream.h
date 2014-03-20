@@ -43,13 +43,15 @@ namespace co
 
         /** Push a stored instance data. */
         void push( const Nodes& receivers, const uint128_t& objectID,
-                   const uint128_t& groupID, const uint128_t& typeID );
+                   const uint128_t& groupID, const uint128_t& typeID, 
+                   LocalNodePtr localNode );
 
         void pushMap( const Nodes& receivers, const uint128_t& objectID,
                       const uint128_t& groupID, const uint128_t& typeID,
                       const uint128_t& version,
                       const uint32_t instanceID,
-                      const Object::ChangeType changeType );
+                      const Object::ChangeType changeType,
+                      LocalNodePtr localNode );
 
         /** Set up mapping of the given version to the given node. */
         void enableMap( const uint128_t& version, NodePtr node,
@@ -64,6 +66,10 @@ namespace co
     protected:
         virtual void sendData( const void* buffer, const uint64_t size,
                                const bool last );
+
+        virtual void _buildTreecastBuffer( lunchbox::Bufferb& buf, 
+                               const uint64_t size );
+
 
     private:
         NodeID _nodeID;

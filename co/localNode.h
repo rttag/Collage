@@ -32,7 +32,10 @@
 
 namespace co
 {
-namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
+namespace detail {
+class LocalNode; class ReceiverThread; 
+class CommandThread; class TreecastThread; 
+}
 
     /**
      * Node specialization for a local node.
@@ -378,6 +381,9 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
         /** Return the command queue to the command thread. @version 1.0 */
         CO_API CommandQueue* getCommandThreadQueue();
 
+        /** Return the command queue to the treecast thread. @version 1.0 */
+        CO_API CommandQueue* getTreecastThreadQueue();
+
         /**
          * @return true if executed from the command handler thread, false if
          *         not.
@@ -467,6 +473,8 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
          */
         CO_API void setAffinity( const int32_t affinity );
 
+        CO_API void treecast( lunchbox::Bufferb& data, Nodes const& nodes );
+
     protected:
         /** @internal
          * Connect a node proxy to this node.
@@ -504,9 +512,11 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
         bool _connectSelf();
 
         bool _startCommandThread();
+        bool _startTreecastThread();
         bool _notifyCommandThreadIdle();
         friend class detail::ReceiverThread;
         friend class detail::CommandThread;
+        friend class detail::TreecastThread;
 
         void _cleanup();
         void _closeNode( NodePtr node );
@@ -561,6 +571,10 @@ namespace detail { class LocalNode; class ReceiverThread; class CommandThread; }
         bool _cmdCommand( ICommand& command );
         bool _cmdCommandAsync( ICommand& command );
         bool _cmdAddConnection( ICommand& command );
+        bool _cmdTreecastAllGather( ICommand& command );
+        bool _cmdTreecastSmallScatter( ICommand& command );
+        bool _cmdTreecastScatter( ICommand& command );
+        bool _cmdStopTreecastThread( ICommand& command );
         bool _cmdDiscard( ICommand& ) { return true; }
         //@}
 

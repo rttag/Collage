@@ -86,6 +86,10 @@ set(CO_HEADERS
   socketConnection.h
   staticMasterCM.h
   staticSlaveCM.h
+  treecast.h
+  treecastHeader.h
+  treecastMessageRecord.h
+  treecastMessageRecordHandler.h
   unbufferedMasterCM.h
   versionedMasterCM.h
   versionedSlaveCM.h
@@ -140,6 +144,9 @@ set(CO_SOURCES
   serializable.cpp
   socketConnection.cpp
   staticSlaveCM.cpp
+  treecast.cpp
+  treecastMessageRecord.cpp
+  treecastMessageRecordHandler.cpp
   unbufferedMasterCM.cpp
   version.cpp
   versionedMasterCM.cpp

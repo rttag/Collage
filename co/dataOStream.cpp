@@ -267,6 +267,15 @@ void DataOStream::_resend()
     sendData( _impl->buffer.getData(), _impl->dataSize, true );
 }
 
+void DataOStream::buildTreecastBuffer( lunchbox::Bufferb& buffer )
+{
+    LBASSERT( !_impl->enabled );
+    LBASSERT( _impl->save );
+
+    _impl->compress( _impl->buffer.getData(), _impl->dataSize, STATE_COMPLETE );
+    _buildTreecastBuffer( buffer, _impl->dataSize);
+}
+
 void DataOStream::_clearConnections()
 {
     _impl->connections.clear();

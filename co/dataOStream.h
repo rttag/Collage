@@ -117,13 +117,15 @@ namespace DataStreamTest { class Sender; }
         void serializeChildren( const std::vector< C* >& children );
         //@}
 
+        /** @internal */
+        CO_API lunchbox::Bufferb& getBuffer();
+
+        void buildTreecastBuffer( lunchbox::Bufferb& buf );
+
     protected:
         CO_API DataOStream(); //!< @internal
         DataOStream( DataOStream& rhs );  //!< @internal
         virtual CO_API ~DataOStream(); //!< @internal
-
-        /** @internal */
-        CO_API lunchbox::Bufferb& getBuffer();
 
         /** @internal Initialize the given compressor. */
         void _initCompressor( const uint32_t compressor );
@@ -159,6 +161,8 @@ namespace DataStreamTest { class Sender; }
         /** @internal Send a data buffer (command) to the receivers. */
         virtual void sendData( const void* buffer, const uint64_t size,
                                const bool last ) = 0;
+        virtual void _buildTreecastBuffer( lunchbox::Bufferb& ,
+            const uint64_t ) { LBUNIMPLEMENTED; }
         //@}
 
         /** @internal Reset the whole stream. */

@@ -27,6 +27,7 @@
 #include "objectDataICommand.h"
 #include "objectInstanceDataOStream.h"
 #include "objectDataOCommand.h"
+#include "global.h"
 
 co::ObjectCMPtr co::ObjectCM::ZERO = new co::NullCM;
 
@@ -49,14 +50,29 @@ void ObjectCM::push( const uint128_t& groupID, const uint128_t& typeID,
     if( nodes.empty( ))
         return;
 
+    uint32_t old = Global::getObjectBufferSize();
+    bool treecast = true;
+    if ( treecast )
+        Global::setObjectBufferSize( ~0u );
+
     ObjectInstanceDataOStream os( this );
     os.enablePush( getVersion(), nodes );
     _object->getInstanceData( os );
 
-    // Send push notification to remote cmd thread while connections are valid
-    OCommand( os.getConnections(), CMD_NODE_OBJECT_PUSH )
-        << _object->getID() << groupID << typeID;
+    if ( treecast )
+    {
+        os.push( nodes, _object->getID(), groupID, typeID, 
+                                    _object->getLocalNode( ));
+        Global::setObjectBufferSize( old );
+    }
+    else
+    {
+        // Send push notification to remote cmd thread 
+        // while connections are valid
+        OCommand( os.getConnections(), CMD_NODE_OBJECT_PUSH )
+            << _object->getID() << groupID << typeID;
 
+    }
     os.disable(); // handled by remote recv thread
 }
 
@@ -68,14 +84,30 @@ void ObjectCM::pushMap( const uint128_t& groupID, const uint128_t& typeID,
     if( nodes.empty( ))
         return;
 
+    uint32_t old = Global::getObjectBufferSize();
+    bool treecast = true;
+    if ( treecast )
+        Global::setObjectBufferSize( ~0u );
+
     ObjectInstanceDataOStream os( this );
     os.enablePush( getVersion(), nodes );
     _object->getInstanceData( os );
 
-    // Send push notification to remote cmd thread while connections are valid
-    OCommand( os.getConnections(), CMD_NODE_OBJECT_PUSH_MAP )
-        << _object->getID() << groupID << typeID << getVersion()
-        << _object->getInstanceID() << _object->getChangeType();
+    if (treecast)
+    {
+        os.pushMap( nodes, _object->getID(), groupID, typeID, getVersion(), 
+                    _object->getInstanceID(), _object->getChangeType(), 
+                    _object->getLocalNode());
+        Global::setObjectBufferSize( old );
+    }
+    else
+    {
+        // Send push notification to remote cmd thread 
+        // while connections are valid
+        OCommand( os.getConnections(), CMD_NODE_OBJECT_PUSH_MAP )
+            << _object->getID() << groupID << typeID << getVersion()
+            << _object->getInstanceID() << _object->getChangeType();
+    }
 
     os.disable(); // handled by remote recv thread
 }

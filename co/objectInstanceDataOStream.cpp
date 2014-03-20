@@ -27,6 +27,7 @@
 #include "objectDataIStream.h"
 #include "objectDataOCommand.h"
 #include "versionedMasterCM.h"
+#include "treeCast.h"
 
 
 namespace co
@@ -69,14 +70,27 @@ void ObjectInstanceDataOStream::enablePush( const uint128_t& version,
 void ObjectInstanceDataOStream::push( const Nodes& receivers,
                                       const uint128_t& objectID,
                                       const uint128_t& groupID,
-                                      const uint128_t& typeID )
+                                      const uint128_t& typeID,
+                                      LocalNodePtr localNode)
 {
     _command = CMD_NODE_OBJECT_INSTANCE_PUSH;
     _nodeID = 0;
     _instanceID = EQ_INSTANCE_NONE;
+
+    bool treecast = true;
+    if ( treecast )
+    {
+        lunchbox::Bufferb data;
+        buildTreecastBuffer( data );
+        _clearConnections();
+        localNode->treecast( data, receivers );
+    }
+
     _setupConnections( receivers );
 
-    _resend();
+    if (!treecast)
+        _resend();
+
     OCommand( getConnections(), CMD_NODE_OBJECT_PUSH )
         << objectID << groupID << typeID;
 
@@ -89,14 +103,27 @@ void ObjectInstanceDataOStream::pushMap( const Nodes& receivers,
                                          const uint128_t& typeID,
                                          const uint128_t& version,
                                          const uint32_t instanceID,
-                                         const Object::ChangeType changeType )
+                                         const Object::ChangeType changeType,
+                                         LocalNodePtr localNode )
 {
     _command = CMD_NODE_OBJECT_INSTANCE_PUSH;
     _nodeID = 0;
     _instanceID = EQ_INSTANCE_NONE;
+    
+    bool treecast = true;
+    if ( treecast )
+    {
+        lunchbox::Bufferb data;
+        buildTreecastBuffer( data );
+        _clearConnections();
+        localNode->treecast( data, receivers );
+    }
+    
     _setupConnections( receivers );
 
-    _resend();
+    if (!treecast)
+        _resend();
+
     OCommand( getConnections(), CMD_NODE_OBJECT_PUSH_MAP )
         << objectID << groupID << typeID << version << instanceID << changeType;
 
@@ -144,4 +171,20 @@ void ObjectInstanceDataOStream::sendData( const void* buffer,
         << _nodeID << _cm->getObject()->getInstanceID();
 }
 
+void ObjectInstanceDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
+                                                      const uint64_t /*size*/ )
+{
+    LBASSERT( _command );
+    LBASSERT( _version != VERSION_INVALID );
+    _sequence = 0;
+
+    ObjectDataOCommand odc( Connections(), _command, COMMANDTYPE_NODE,
+                            _cm->getObject()->getID(), _instanceID, _version, 0,
+                             getBuffer().getNumBytes(), true, this );
+    odc << _nodeID << _cm->getObject()->getInstanceID();
+    buf.append(odc.getBuffer().getData(), odc.getBuffer().getNumBytes());
+    uint64_t cmdsize = odc.getBuffer().getNumBytes()+ getBuffer().getNumBytes();
+    reinterpret_cast< uint64_t* >( buf.getData() )[ 0 ] = cmdsize;
+    buf.append(getBuffer().getData(), getBuffer().getNumBytes());
+}
 }

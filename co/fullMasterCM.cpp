@@ -24,6 +24,7 @@
 #include "node.h"
 #include "object.h"
 #include "objectDataIStream.h"
+#include "global.h"
 
 //#define EQ_INSTRUMENT
 
@@ -77,9 +78,12 @@ void FullMasterCM::init()
 
     InstanceData* data = _newInstanceData();
 
+    uint32_t old = Global::getObjectBufferSize();
+    Global::setObjectBufferSize( ~0u );
     data->os.enableCommit( VERSION_FIRST, *_slaves );
     _object->getInstanceData( data->os );
     data->os.disable();
+    Global::setObjectBufferSize( old );
 
     _instanceDatas.push_back( data );
     ++_version;
@@ -375,7 +379,8 @@ void FullMasterCM::push( const uint128_t& groupID, const uint128_t& typeID,
 {
     Mutex mutex( _slaves );
     InstanceData* instanceData = _instanceDatas.back();
-    instanceData->os.push( nodes, _object->getID(), groupID, typeID );
+    instanceData->os.push( nodes, _object->getID(), groupID, 
+                           typeID, _object->getLocalNode() );
 }
 
 void FullMasterCM::pushMap( const uint128_t& groupID, const uint128_t& typeID,
@@ -384,8 +389,8 @@ void FullMasterCM::pushMap( const uint128_t& groupID, const uint128_t& typeID,
     Mutex mutex( _slaves );
     InstanceData* instanceData = _instanceDatas.back();
     instanceData->os.pushMap( nodes, _object->getID(), groupID, typeID,
-                              getVersion(), _object->getInstanceID(), 
-                              _object->getChangeType() );
+                        getVersion(), _object->getInstanceID(), 
+                        _object->getChangeType(), _object->getLocalNode( ));
 }
 
 }

@@ -40,6 +40,7 @@
 #include "sendToken.h"
 #include "worker.h"
 #include "zeroconf.h"
+#include "treecast.h"
 
 #include <lunchbox/clock.h>
 #include <lunchbox/hash.h>
@@ -80,7 +81,8 @@ public:
     virtual bool init()
         {
             setName( std::string("R ") + lunchbox::className(_localNode));
-            return _localNode->_startCommandThread();
+            return _localNode->_startCommandThread() && 
+                   _localNode->_startTreecastThread();
         }
     virtual void run() { _localNode->_runReceiverThread(); }
 
@@ -110,6 +112,28 @@ private:
     co::LocalNode* const _localNode;
 };
 
+class TreecastThread : public Worker
+{
+public:
+    TreecastThread( co::LocalNode* localNode ) : _localNode( localNode ){}
+
+protected:
+    virtual bool init()
+    {
+        setName( std::string( "TC " ) + lunchbox::className( _localNode ));
+        return true;
+    }
+
+    virtual bool stopRunning() { return _localNode->isClosed(); }
+    virtual bool notifyIdle()
+    {
+        return true;
+    }
+
+private:
+    co::LocalNode* const _localNode;
+};
+
 class LocalNode
 {
 public:
@@ -121,7 +145,9 @@ public:
             , objectStore( 0 )
             , receiverThread( 0 )
             , commandThread( 0 )
+            , treecastThread( 0 )
             , service( "_collage._tcp" )
+            , treeCaster(TreecastConfig())
         {
         }
 
@@ -137,6 +163,10 @@ public:
             LBASSERT( !commandThread->isRunning( ));
             delete commandThread;
             commandThread = 0;
+
+            LBASSERT( !treecastThread->isRunning( ));
+            delete treecastThread;
+            treecastThread = 0;
 
             LBASSERT( !receiverThread->isRunning( ));
             delete receiverThread;
@@ -184,6 +214,9 @@ public:
 
     ReceiverThread* receiverThread;
     CommandThread* commandThread;
+    TreecastThread* treecastThread;
+
+    Treecast treeCaster;
 
     lunchbox::Lockable< lunchbox::Servus > service;
 };
@@ -195,9 +228,12 @@ LocalNode::LocalNode( const uint32_t type )
 {
     _impl->receiverThread = new detail::ReceiverThread( this );
     _impl->commandThread  = new detail::CommandThread( this );
+    _impl->treecastThread = new detail::TreecastThread( this );
+    _impl->treeCaster.setLocalNode( this );
     _impl->objectStore = new ObjectStore( this );
 
     CommandQueue* queue = getCommandThreadQueue();
+    CommandQueue* trQ = getTreecastThreadQueue();
     registerCommand( CMD_NODE_CONNECT,
                      CmdFunc( this, &LocalNode::_cmdConnect ), 0 );
     registerCommand( CMD_NODE_CONNECT_BE,
@@ -246,6 +282,16 @@ LocalNode::LocalNode( const uint32_t type )
                      CmdFunc( this, &LocalNode::_cmdCommand ), 0 );
     registerCommand( CMD_NODE_ADD_CONNECTION,
                      CmdFunc( this, &LocalNode::_cmdAddConnection ), 0 );
+    registerCommand( CMD_NODE_TREECAST_ALLGATHER,
+                     CmdFunc( this, &LocalNode::_cmdTreecastAllGather ), trQ);
+    registerCommand( CMD_NODE_TREECAST_SMALLSCATTER,
+                     CmdFunc( this, &LocalNode::_cmdTreecastSmallScatter ),trQ);
+    registerCommand( CMD_NODE_TREECAST_SCATTER,
+                     CmdFunc( this, &LocalNode::_cmdTreecastScatter ), trQ);
+    registerCommand( CMD_NODE_STOP_TREECAST,
+                     CmdFunc( this, &LocalNode::_cmdStopTreecastThread ),trQ);
+
+    
 }
 
 LocalNode::~LocalNode( )
@@ -321,6 +367,7 @@ bool LocalNode::initLocal( const int argc, char** argv )
 
 bool LocalNode::listen()
 {
+    _impl->treeCaster.setLocalNode( this );
     LBVERB << "Listener data: " << serialize() << std::endl;
     if( !isClosed() || !_connectSelf( ))
         return false;
@@ -1095,6 +1142,11 @@ CommandQueue* LocalNode::getCommandThreadQueue()
     return _impl->commandThread->getWorkerQueue();
 }
 
+CommandQueue* LocalNode::getTreecastThreadQueue()
+{
+    return _impl->treecastThread->getWorkerQueue();
+}
+
 bool LocalNode::inCommandThread() const
 {
     return _impl->commandThread->isCurrent();
@@ -1181,6 +1233,7 @@ void LocalNode::_runReceiverThread()
 
     _impl->pendingCommands.clear();
     LBCHECK( _impl->commandThread->join( ));
+    LBCHECK( _impl->treecastThread->join( ));
 
     ConnectionPtr connection = getConnection();
     PipeConnectionPtr pipe = LBSAFECAST( PipeConnection*, connection.get( ));
@@ -1526,6 +1579,8 @@ bool LocalNode::_cmdStopRcv( ICommand& command )
     _setClosing(); // causes rcv thread exit
 
     command.setCommand( CMD_NODE_STOP_CMD ); // causes cmd thread exit
+    _dispatchCommand( command );
+    command.setCommand( CMD_NODE_STOP_TREECAST );
     _dispatchCommand( command );
     return true;
 }
@@ -2030,5 +2085,45 @@ bool LocalNode::_cmdAddConnection( ICommand& command )
     _addConnection( connection );
     return true;
 }
+
+bool LocalNode::_startTreecastThread()
+{
+    return _impl->treecastThread->start();
+}
+
+bool LocalNode::_cmdStopTreecastThread( ICommand& command )
+{
+    LBASSERT( _impl->treecastThread->isCurrent() );
+    LBASSERTINFO( isClosing() || isClosed(), *this );
+    while ( isClosing() ); // wait for cmd thread to close
+    return true;
+}
+
+bool LocalNode::_cmdTreecastAllGather( ICommand& command )
+{
+    LBASSERT( _impl->treecastThread->isCurrent() );
+    _impl->treeCaster.onAllgatherCommand(command);
+    return true;
+}
+
+bool LocalNode::_cmdTreecastSmallScatter( ICommand& command )
+{
+    LBASSERT( _impl->treecastThread->isCurrent() );
+    _impl->treeCaster.onSmallScatterCommand(command);
+    return true;
+}
+
+bool LocalNode::_cmdTreecastScatter( ICommand& command )
+{
+    LBASSERT( _impl->treecastThread->isCurrent() );
+    _impl->treeCaster.onScatterCommand(command);
+    return true;
+}
+
+void LocalNode::treecast( lunchbox::Bufferb& data, Nodes const& nodes )
+{
+    _impl->treeCaster.send(data, 0, nodes);
+}
+
 
 }

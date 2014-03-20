@@ -24,6 +24,7 @@
 #include "node.h"
 #include "object.h"
 #include "objectDataIStream.h"
+#include "global.h"
 
 namespace co
 {
@@ -54,9 +55,12 @@ void DeltaMasterCM::_commit()
         // save instance data
         InstanceData* instanceData = _newInstanceData();
 
+        uint32_t old = Global::getObjectBufferSize();
+        Global::setObjectBufferSize( ~0u );
         instanceData->os.enableCommit( _version + 1, Nodes( ));
         _object->getInstanceData( instanceData->os );
         instanceData->os.disable();
+        Global::setObjectBufferSize( old );
 
         if( _deltaData.hasSentData() || instanceData->os.hasSentData( ))
         {
