@@ -13,7 +13,7 @@
 namespace co {
 
 TreecastConfig::TreecastConfig()
-: smallMessageThreshold(/*12*1024*/512)
+: smallMessageThreshold(12*1024)
 , blacklistSize(10)
 , baseTimeout(10000)
 , masterTimeoutPerMB(300)
@@ -81,6 +81,9 @@ void Treecast::send(lunchbox::Bufferb& data, uint32_t resendNr, Nodes const& nod
     header.messageId = msgID;
     header.resendNr = resendNr;
     header.nodes = myNodes;
+
+    LBLOG( LOG_TC ) << "send message " << msgID << " with " << data.getNumBytes() 
+                    << "bytes of data" << std::endl;
 
     bool smallMessage = (byteCount <= _config.smallMessageThreshold);
     if (smallMessage)
@@ -158,6 +161,8 @@ void Treecast::onAllgatherCommand(ICommand& command)
 void Treecast::_send(NodeID destinationId, TreecastHeader const& header, Array<const uint8_t> const& data )
 {
     NodePtr destNode = _localNode->getNode( destinationId );
+    if ( !destNode.isValid() )
+        destNode = _localNode->connect( destinationId );
     uint64_t size = data.getNumBytes();
     OCommand cmd(destNode->send( header.cmd ));
     cmd << header << size << data;
@@ -230,6 +235,8 @@ void Treecast::propagateScatter(TreecastHeader & header, lunchbox::Bufferb const
                 Array<const uint8_t> sendData( data.getData() + sourceOffset, sendSize );
                 size_t destinationRank = rank + mask;
                 NodeID destinationId = header.nodes[destinationRank];
+                LBLOG( LOG_TC ) << "sending " << (smallMessage ? "scatter " : "smallscatter ")
+                    << header.messageId << " to " << destinationId << std::endl;
                 _send(destinationId, header, sendData);
             }
         }
@@ -256,6 +263,9 @@ void Treecast::initiateAllgather(ScatterHeader& header, lunchbox::Bufferb const&
     Array<const uint8_t> sndData(data.getData(), sendSize);
     size_t destinationRank = (rank + 1) % header.nodes.size();
     NodeID destinationId = header.nodes[destinationRank];
+    LBLOG( LOG_TC ) << "sending " << "gather " << allgatherHeader.messageId
+        << "." << allgatherHeader.pieceNr << " to " << destinationId << std::endl; 
+
     _send(destinationId, allgatherHeader, sndData);
 }
 
@@ -274,7 +284,8 @@ void Treecast::processScatterCommand(ScatterHeader& header, lunchbox::Bufferb co
 
     // Calculate my own rank in the communication
     const size_t rank = _messageRecordHandler.calculateRank(header.nodes);
-    LBLOG(LOG_TC) << "Received scatter command. My rank is: " << rank << std::endl;
+    LBLOG(LOG_TC) << "Received scatter command with message id " << header.messageId
+                  << ". My rank is: " << rank << std::endl;
 
     // Propagate the scatter
     propagateScatter(header, data, receivedSize, pieceSize, nodeCount, rank, false);
@@ -315,7 +326,8 @@ void Treecast::processSmallScatterCommand( ScatterHeader& header, lunchbox::Buff
 
     // Calculate my own rank in the communication
     const size_t rank = _messageRecordHandler.calculateRank(header.nodes);
-    LBLOG( LOG_TC) << "Received small scatter command. My rank is: " << rank << std::endl;
+    LBLOG(LOG_TC) << "Received small scatter command with message id " << header.messageId
+        << ". My rank is: " << rank << std::endl;
 
     // Propagate the scatter
     propagateScatter(header, data, header.byteCount, header.byteCount, nodeCount, rank, true);

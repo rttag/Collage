@@ -2,6 +2,7 @@
 #pragma warning( disable: 4005 )
 #include "treecastMessageRecordHandler.h"
 #include "localNode.h"
+#include "log.h"
 #pragma warning( default: 4005 )
 
 namespace co {
@@ -23,7 +24,7 @@ co::TreecastMessageRecordPtr TreecastMessageRecordHandler::createOrUpdateMessage
         // The message is new to me
         m_multicastMessageRecordMap[messageId] = record =
             TreecastMessageRecord::create(byteCount, pieceCount, resendNr, nodes);
-        LBVERB << "CREATED new messageRecord: messageId: " << messageId << ", resendNr: " << resendNr
+        LBLOG( LOG_TC ) << "CREATED new messageRecord: messageId: " << messageId << ", resendNr: " << resendNr
                   << ", byteCount: " << byteCount << ", pieceCount: " << pieceCount  << std::endl;
     }
     else
@@ -49,7 +50,7 @@ co::TreecastMessageRecordPtr TreecastMessageRecordHandler::createOrUpdateMessage
 TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRecord(UUID const& messageId,
     uint32_t resendNr, bool doCheck)
 {
-    LBVERB << "START cleaning up message record: messageId: " << messageId << ", resendNr: " << resendNr
+    LBLOG( LOG_TC ) << "START cleaning up message record: messageId: " << messageId << ", resendNr: " << resendNr
               << ", doCheck: " << doCheck << std::endl;
     TreecastMessageRecordPtr record;
     {
@@ -58,14 +59,14 @@ TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRec
             m_multicastMessageRecordMap.find(messageId);
         if (m_multicastMessageRecordMap.end() == mapIt)
         {
-            LBVERB << "I just got a cleanup request on an unknown multicast message." << std::endl;
+            LBLOG( LOG_TC ) << "I just got a cleanup request on an unknown multicast message." << std::endl;
             return TreecastMessageRecordPtr();
         }
         // Let's check the resendNr
         record = mapIt->second;
         if (record->resendNr != resendNr)
         {
-            LBVERB << "Wrong resendNr on cleanup of a multicast message record, skipping." << std::endl;
+            LBLOG( LOG_TC ) << "Wrong resendNr on cleanup of a multicast message record, skipping." << std::endl;
             return TreecastMessageRecordPtr();
         }
         if (doCheck)
@@ -84,7 +85,7 @@ TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRec
         }
         // Delete the record
         m_multicastMessageRecordMap.erase(mapIt);
-        LBVERB << "FINISHED cleaning up message record: messageId: " << messageId << ", resendNr: " << resendNr
+        LBLOG( LOG_TC ) << "FINISHED cleaning up message record: messageId: " << messageId << ", resendNr: " << resendNr
                   << ", doCheck: " << doCheck << std::endl;
     }
     // Calculate rank

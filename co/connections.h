@@ -23,6 +23,7 @@
 #include <co/connection.h>
 #include <co/node.h>
 #include <co/types.h>
+#include <co/global.h>
 #include <lunchbox/hash.h>
 
 #include <set>
@@ -89,6 +90,18 @@ inline void gatherConnections( const Nodes& nodes, Connections& result )
         if( connection.isValid( ))
             result.push_back( connection );
     }
+}
+
+inline bool useTreecast( const Nodes& nodes )
+{
+    Connections connections;
+    gatherConnections(nodes, connections);
+
+    if ( nodes.size() != connections.size() )
+        return false;
+
+    return nodes.size() >= 
+                Global::getIAttribute( Global::IATTR_TREECAST_THRESHOLD );
 }
 
 }

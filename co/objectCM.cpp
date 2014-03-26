@@ -28,6 +28,7 @@
 #include "objectInstanceDataOStream.h"
 #include "objectDataOCommand.h"
 #include "global.h"
+#include "connections.h"
 
 co::ObjectCMPtr co::ObjectCM::ZERO = new co::NullCM;
 
@@ -51,7 +52,7 @@ void ObjectCM::push( const uint128_t& groupID, const uint128_t& typeID,
         return;
 
     uint32_t old = Global::getObjectBufferSize();
-    bool treecast = true;
+    bool treecast = useTreecast( nodes );
     if ( treecast )
         Global::setObjectBufferSize( ~0u );
 
@@ -85,7 +86,7 @@ void ObjectCM::pushMap( const uint128_t& groupID, const uint128_t& typeID,
         return;
 
     uint32_t old = Global::getObjectBufferSize();
-    bool treecast = true;
+    bool treecast = useTreecast( nodes );
     if ( treecast )
         Global::setObjectBufferSize( ~0u );
 

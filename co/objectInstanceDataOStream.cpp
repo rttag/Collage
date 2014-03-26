@@ -28,6 +28,7 @@
 #include "objectDataOCommand.h"
 #include "versionedMasterCM.h"
 #include "treeCast.h"
+#include "connections.h"
 
 
 namespace co
@@ -77,7 +78,7 @@ void ObjectInstanceDataOStream::push( const Nodes& receivers,
     _nodeID = 0;
     _instanceID = EQ_INSTANCE_NONE;
 
-    bool treecast = true;
+    bool treecast = useTreecast( receivers );
     if ( treecast )
     {
         lunchbox::Bufferb data;
@@ -110,7 +111,7 @@ void ObjectInstanceDataOStream::pushMap( const Nodes& receivers,
     _nodeID = 0;
     _instanceID = EQ_INSTANCE_NONE;
     
-    bool treecast = true;
+    bool treecast = useTreecast( receivers );
     if ( treecast )
     {
         lunchbox::Bufferb data;

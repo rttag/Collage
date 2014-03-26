@@ -261,7 +261,7 @@ LocalNode::LocalNode( const uint32_t type )
     registerCommand( CMD_NODE_DISCONNECT,
                      CmdFunc( this, &LocalNode::_cmdDisconnect ), 0 );
     registerCommand( CMD_NODE_GET_NODE_DATA,
-                     CmdFunc( this, &LocalNode::_cmdGetNodeData), queue );
+                     CmdFunc( this, &LocalNode::_cmdGetNodeData), 0 );
     registerCommand( CMD_NODE_GET_NODE_DATA_REPLY,
                      CmdFunc( this, &LocalNode::_cmdGetNodeDataReply ), 0 );
     registerCommand( CMD_NODE_ACQUIRE_SEND_TOKEN,
