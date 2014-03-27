@@ -32,10 +32,9 @@ co::TreecastMessageRecordPtr TreecastMessageRecordHandler::createOrUpdateMessage
         // The message is already known. This could be a re-send, or an allgather message arrived earlier
         // In either case, we should make sure that the stored metadata is up-to-date.
         record = messageIt->second;
-        LBASSERT(typeId == record->typeId);
         LBASSERT(byteCount == record->buffer.getNumBytes());
         LBASSERT(pieceCount == record->state.size());
-        if (record->resendNr < resendNr)
+        if ( record->resendNr < resendNr )
         {
             record->resendNr = resendNr;
         }
