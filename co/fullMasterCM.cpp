@@ -25,6 +25,7 @@
 #include "object.h"
 #include "objectDataIStream.h"
 #include "global.h"
+#include "connections.h"
 
 //#define EQ_INSTRUMENT
 
@@ -358,7 +359,10 @@ void FullMasterCM::_commit()
     InstanceData* instanceData = _newInstanceData();
     instanceData->os.enableCommit( _version + 1, *_slaves );
     _object->getInstanceData( instanceData->os );
-    instanceData->os.disable();
+    if ( useTreecast( *_slaves ))
+        instanceData->os.disableTreecast( *_slaves, _object->getLocalNode());
+    else
+        instanceData->os.disable();
 
     if( instanceData->os.hasSentData( ))
     {

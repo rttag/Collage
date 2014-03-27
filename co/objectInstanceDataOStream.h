@@ -68,7 +68,7 @@ namespace co
                                const bool last );
 
         virtual void _buildTreecastBuffer( lunchbox::Bufferb& buf, 
-                               const uint64_t size );
+                               const uint64_t offset );
 
 
     private:

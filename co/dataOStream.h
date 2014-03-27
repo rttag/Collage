@@ -51,6 +51,9 @@ namespace DataStreamTest { class Sender; }
         /** @internal Disable and flush the output to the current receivers. */
         CO_API void disable();
 
+        /** @internal Disable and flush output to the receivers via treecast.*/
+        void disableTreecast( Nodes const& receivers, LocalNodePtr localNode );
+
         /** @internal Enable copying of all data into a saved buffer. */
         void enableSave();
 

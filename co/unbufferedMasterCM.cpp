@@ -26,6 +26,7 @@
 #include "objectDataIStream.h"
 #include "objectDeltaDataOStream.h"
 #include "objectInstanceDataOStream.h"
+#include "connections.h"
 
 namespace co
 {
@@ -58,7 +59,10 @@ uint128_t UnbufferedMasterCM::commit( const uint32_t incarnation )
     ObjectDeltaDataOStream os( this );
     os.enableCommit( _version + 1, *_slaves );
     _object->pack( os );
-    os.disable();
+    if ( useTreecast( *_slaves ))
+        os.disableTreecast( *_slaves, _object->getLocalNode());
+    else
+        os.disable();
 
     if( os.hasSentData( ))
     {

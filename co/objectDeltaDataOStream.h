@@ -35,6 +35,9 @@ namespace co
     protected:
         virtual void sendData( const void* buffer, const uint64_t size,
                                const bool last );
+        virtual void _buildTreecastBuffer( lunchbox::Bufferb& buf,
+            const uint64_t offset );
+
     };
 }
 #endif //CO_OBJECTDELTADATAOSTREAM_H

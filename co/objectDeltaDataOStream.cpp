@@ -42,4 +42,22 @@ void ObjectDeltaDataOStream::sendData( const void* buffer, const uint64_t size,
                              EQ_INSTANCE_ALL, size, last );
 }
 
+void ObjectDeltaDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
+                                                     const uint64_t offset )
+{
+    LBASSERT( _version != VERSION_INVALID );
+    _sequence = 0;
+
+    ObjectDataOCommand odc( Connections(), CMD_OBJECT_DELTA, 
+        COMMANDTYPE_OBJECT, _cm->getObject()->getID(), EQ_INSTANCE_ALL, 
+        _version, 0, getBuffer().getNumBytes(), true, this );
+    buf.append(odc.getBuffer().getData(), odc.getBuffer().getNumBytes());
+    uint64_t cmdsize = odc.getBuffer().getNumBytes() + 
+        getBuffer().getNumBytes() - offset;
+    reinterpret_cast< uint64_t* >( buf.getData() )[ 0 ] = cmdsize;
+    buf.append( getBuffer().getData() + offset, 
+        getBuffer().getNumBytes() - offset );
+}
+
+
 }

@@ -273,7 +273,7 @@ void DataOStream::buildTreecastBuffer( lunchbox::Bufferb& buffer )
     LBASSERT( _impl->save );
 
     _impl->compress( _impl->buffer.getData(), _impl->dataSize, STATE_COMPLETE );
-    _buildTreecastBuffer( buffer, _impl->dataSize);
+    _buildTreecastBuffer( buffer, 0 );
 }
 
 void DataOStream::_clearConnections()
@@ -320,6 +320,49 @@ void DataOStream::disable()
     _impl->enabled = false;
     _impl->connections.clear();
 }
+
+void DataOStream::disableTreecast( Nodes const& receivers, LocalNodePtr localNode )
+{
+    if( !_impl->enabled )
+        return;
+
+    _impl->dataSize = _impl->buffer.getSize();
+    _impl->dataSent = _impl->dataSize > 0;
+
+    if( _impl->dataSent )
+    {
+        void* ptr = _impl->buffer.getData() + _impl->bufferStart;
+        const uint64_t size = _impl->buffer.getSize() - _impl->bufferStart;
+
+        if( size == 0 && _impl->state == STATE_PARTIAL )
+        {
+            // OPT: all data has been sent in one compressed chunk
+            _impl->state = STATE_COMPLETE;
+#ifndef CO_AGGRESSIVE_CACHING
+            _impl->buffer.clear();
+#endif
+        }
+        else
+        {
+            _impl->state = STATE_UNCOMPRESSED;
+            const CompressorState state = _impl->bufferStart == 0 ?
+STATE_COMPLETE : STATE_PARTIAL;
+            _impl->compress( ptr, size, state );
+        }
+
+        lunchbox::Bufferb data;
+        _buildTreecastBuffer( data, _impl->bufferStart );
+        localNode->treecast( data, receivers );
+    }
+
+#ifndef CO_AGGRESSIVE_CACHING
+    if( !_impl->save )
+        _impl->buffer.clear();
+#endif
+    _impl->enabled = false;
+    _impl->connections.clear();
+}
+
 
 void DataOStream::enableSave()
 {

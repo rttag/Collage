@@ -184,6 +184,29 @@ int main( int argc, char **argv )
             monitor[nodeidx].waitEQ( co::Object::ChangeType( type ) );
 
             TEST( masterObj->getMessage() == server[nodeidx]->object->getMessage() );
+        }
+
+        largemessage += largemessage;
+        masterObj->setMessage( largemessage );
+        masterObj->commit();
+        masterObj->commit();
+        lunchbox::sleep( 110 );
+
+        for ( uint32_t nodeidx = 0; nodeidx < NODE_COUNT; ++nodeidx )
+        {
+            if( type > co::Object::STATIC ) // no commits for static objects
+            {
+                server[nodeidx]->object->sync( 3 );
+
+                TESTINFO( server[nodeidx]->object->getVersion() == 3,
+                    server[nodeidx]->object->getVersion());
+
+                TESTINFO( masterObj->getVersion() == 3,
+                    masterObj->getVersion());
+
+                TESTINFO( masterObj->getMessage() == server[nodeidx]->object->getMessage(),
+                    server[nodeidx]->object->getMessage() );
+            }
 
             server[nodeidx]->unmapObject( server[nodeidx]->object );
             delete server[nodeidx]->object;

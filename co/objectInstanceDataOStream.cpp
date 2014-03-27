@@ -173,7 +173,7 @@ void ObjectInstanceDataOStream::sendData( const void* buffer,
 }
 
 void ObjectInstanceDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
-                                                      const uint64_t /*size*/ )
+                                                      const uint64_t offset )
 {
     LBASSERT( _command );
     LBASSERT( _version != VERSION_INVALID );
@@ -184,8 +184,10 @@ void ObjectInstanceDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
                              getBuffer().getNumBytes(), true, this );
     odc << _nodeID << _cm->getObject()->getInstanceID();
     buf.append(odc.getBuffer().getData(), odc.getBuffer().getNumBytes());
-    uint64_t cmdsize = odc.getBuffer().getNumBytes()+ getBuffer().getNumBytes();
+    uint64_t cmdsize = odc.getBuffer().getNumBytes() + 
+                       getBuffer().getNumBytes() - offset;
     reinterpret_cast< uint64_t* >( buf.getData() )[ 0 ] = cmdsize;
-    buf.append(getBuffer().getData(), getBuffer().getNumBytes());
+    buf.append( getBuffer().getData() + offset, 
+                getBuffer().getNumBytes() - offset );
 }
 }

@@ -21,6 +21,7 @@
 #define CO_CONNECTIONS_H
 
 #include <co/connection.h>
+#include <co/connectionDescription.h>
 #include <co/node.h>
 #include <co/types.h>
 #include <co/global.h>
