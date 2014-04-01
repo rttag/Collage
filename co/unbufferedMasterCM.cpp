@@ -60,7 +60,7 @@ uint128_t UnbufferedMasterCM::commit( const uint32_t incarnation )
     os.enableCommit( _version + 1, *_slaves );
     _object->pack( os );
     if ( useTreecast( *_slaves ))
-        os.disableTreecast( *_slaves, _object->getLocalNode());
+        os.treecastDisable( *_slaves, _object->getLocalNode());
     else
         os.disable();
 

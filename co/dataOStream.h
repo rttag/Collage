@@ -52,7 +52,7 @@ namespace DataStreamTest { class Sender; }
         CO_API void disable();
 
         /** @internal Disable and flush output to the receivers via treecast.*/
-        void disableTreecast( Nodes const& receivers, LocalNodePtr localNode );
+        void treecastDisable( Nodes const& receivers, LocalNodePtr localNode );
 
         /** @internal Enable copying of all data into a saved buffer. */
         void enableSave();
@@ -124,6 +124,8 @@ namespace DataStreamTest { class Sender; }
         CO_API lunchbox::Bufferb& getBuffer();
 
         void buildTreecastBuffer( lunchbox::Bufferb& buf );
+
+        uint64_t copyCompressedDataToBuffer( lunchbox::Bufferb& buf );
 
     protected:
         CO_API DataOStream(); //!< @internal

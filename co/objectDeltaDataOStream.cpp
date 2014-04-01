@@ -52,11 +52,19 @@ void ObjectDeltaDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
         COMMANDTYPE_OBJECT, _cm->getObject()->getID(), EQ_INSTANCE_ALL, 
         _version, 0, getBuffer().getNumBytes(), true, this );
     buf.append(odc.getBuffer().getData(), odc.getBuffer().getNumBytes());
-    uint64_t cmdsize = odc.getBuffer().getNumBytes() + 
-        getBuffer().getNumBytes() - offset;
+
+    uint64_t cmdsize = odc.getBuffer().getNumBytes();
+    if ( getCompressedDataSize() == 0 && getBuffer().getNumBytes() )
+    {
+        cmdsize += getBuffer().getNumBytes() - offset;
+        buf.append( getBuffer().getData() + offset, 
+            getBuffer().getNumBytes() - offset );
+    }
+    else
+    {
+        cmdsize = copyCompressedDataToBuffer( buf );
+    }
     reinterpret_cast< uint64_t* >( buf.getData() )[ 0 ] = cmdsize;
-    buf.append( getBuffer().getData() + offset, 
-        getBuffer().getNumBytes() - offset );
 }
 
 

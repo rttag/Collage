@@ -360,7 +360,7 @@ void FullMasterCM::_commit()
     instanceData->os.enableCommit( _version + 1, *_slaves );
     _object->getInstanceData( instanceData->os );
     if ( useTreecast( *_slaves ))
-        instanceData->os.disableTreecast( *_slaves, _object->getLocalNode());
+        instanceData->os.treecastDisable( *_slaves, _object->getLocalNode());
     else
         instanceData->os.disable();
 
