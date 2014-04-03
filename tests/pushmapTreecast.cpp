@@ -186,11 +186,13 @@ int main( int argc, char **argv )
             TEST( masterObj->getMessage() == server[nodeidx]->object->getMessage() );
         }
 
-        largemessage += largemessage;
-        masterObj->setMessage( largemessage );
-        masterObj->commit();
-        masterObj->commit();
-        lunchbox::sleep( 110 );
+        if( type > co::Object::STATIC ) // no commits for static objects
+        {
+            masterObj->setMessage( new_message );
+            masterObj->commit();
+            masterObj->commit();
+            lunchbox::sleep( 110 );
+        }
 
         for ( uint32_t nodeidx = 0; nodeidx < NODE_COUNT; ++nodeidx )
         {

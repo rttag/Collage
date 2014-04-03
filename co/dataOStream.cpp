@@ -272,7 +272,8 @@ void DataOStream::buildTreecastBuffer( lunchbox::Bufferb& buffer )
     LBASSERT( !_impl->enabled );
     LBASSERT( _impl->save );
 
-    _impl->compress( _impl->buffer.getData(), _impl->dataSize, STATE_COMPLETE );
+    _impl->compress( _impl->buffer.getData(), _impl->buffer.getNumBytes(),
+                                                               STATE_COMPLETE );
     _buildTreecastBuffer( buffer, 0 );
 }
 
@@ -321,7 +322,30 @@ void DataOStream::disable()
     _impl->connections.clear();
 }
 
-void DataOStream::disableTreecast( Nodes const& receivers, LocalNodePtr localNode )
+uint64_t DataOStream::copyCompressedDataToBuffer( lunchbox::Bufferb& buf )
+{
+    uint64_t copied = 0;
+    const uint32_t nChunks = _impl->getNumChunks();
+    uint64_t* chunkSizes =static_cast< uint64_t* >
+        ( alloca (nChunks * sizeof( uint64_t )));
+    void** chunks = static_cast< void ** >
+        ( alloca( nChunks * sizeof( void* )));
+
+    _getCompressedData( chunks, chunkSizes );
+
+    for( size_t j = 0; j < nChunks; ++j )
+    {
+        copied += chunkSizes[j];
+        buf.append( reinterpret_cast<uint8_t*>(&chunkSizes[j]), 
+                                                        sizeof( uint64_t ));
+        buf.append( reinterpret_cast<uint8_t*>(chunks[j]), chunkSizes[j] );
+    }
+
+    return copied;
+}
+
+void DataOStream::treecastDisable( Nodes const& receivers, 
+                                                    LocalNodePtr localNode )
 {
     if( !_impl->enabled )
         return;

@@ -184,10 +184,18 @@ void ObjectInstanceDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
                              getBuffer().getNumBytes(), true, this );
     odc << _nodeID << _cm->getObject()->getInstanceID();
     buf.append(odc.getBuffer().getData(), odc.getBuffer().getNumBytes());
-    uint64_t cmdsize = odc.getBuffer().getNumBytes() + 
-                       getBuffer().getNumBytes() - offset;
+    
+    uint64_t cmdsize = odc.getBuffer().getNumBytes();
+    if ( getCompressedDataSize() == 0 && getBuffer().getNumBytes() )
+    {
+        cmdsize += getBuffer().getNumBytes() - offset;
+        buf.append( getBuffer().getData() + offset, 
+            getBuffer().getNumBytes() - offset );
+    }
+    else
+    {
+        cmdsize = copyCompressedDataToBuffer( buf );
+    }
     reinterpret_cast< uint64_t* >( buf.getData() )[ 0 ] = cmdsize;
-    buf.append( getBuffer().getData() + offset, 
-                getBuffer().getNumBytes() - offset );
 }
 }
