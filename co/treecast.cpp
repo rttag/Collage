@@ -75,11 +75,11 @@ void Treecast::updateConfig(TreecastConfig const& config)
 
 Treecast::Treecast( TreecastConfig const& config)
 : _config(config) 
+, _messageRecordHandler()
 , _pingTimer( _io )
 , _resendTimer( _io )
-, _messageRecordHandler()
-, _ioThread( new detail::TimerThread( _io ) )
 , _needToStartTimers( true )
+, _ioThread( new detail::TimerThread( _io ) )
 , _queueMonitor( true )
 
 {
