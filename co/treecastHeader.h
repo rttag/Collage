@@ -25,6 +25,8 @@ public:
         is >> messageId >> nodes;
     }
 
+    virtual ~TreecastHeader(){}
+
     virtual void byteswap()
     {
 #ifdef COLLAGE_BIGENDIAN
@@ -40,7 +42,7 @@ public:
     uint64_t            byteCount;      //<! The full size of the blob
     
     // not serialized
-    enum NodeCommand    cmd;
+    enum co::NodeCommand    cmd;
 
     virtual void serialize( DataOStream& os ) const
     {

@@ -3,16 +3,16 @@
 namespace co {
 
 TreecastMessageRecordPtr TreecastMessageRecord::create(size_t byteCount, size_t pieceCount,
-                                                       std::vector<NodeID> const& nodes)
+                                                       std::vector<NodeID> const& inNodes)
 {
     return TreecastMessageRecordPtr(
-        new TreecastMessageRecord(byteCount, pieceCount, nodes));
+        new TreecastMessageRecord(byteCount, pieceCount, inNodes));
 }
 
 TreecastMessageRecord::TreecastMessageRecord(size_t byteCount, size_t pieceCount,
-    std::vector<NodeID> const& nodes)
+    std::vector<NodeID> const& inNodes)
 : state(pieceCount)
-, nodes(nodes)
+, nodes(inNodes)
 {
     buffer.reset(byteCount);
 }

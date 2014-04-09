@@ -1,4 +1,4 @@
-#include "treeCast.h"
+#include "treecast.h"
 #include "treecastHeader.h"
 #include "localNode.h"
 #include "oCommand.h"
@@ -24,7 +24,7 @@ namespace co {
         class TimerThread : public lunchbox::Thread
         {
         public:
-            TimerThread( boost::asio::io_service* io ) : _io(io), _work( new boost::asio::io_service::work(*io) ) {}
+            TimerThread( boost::asio::io_service& io ) : _io(io), _work( new boost::asio::io_service::work( _io ) ) {}
             virtual bool init()
             {
                 setName( std::string("TimerTreeCastThread") );
@@ -32,7 +32,7 @@ namespace co {
             }
             virtual void run() 
             {
-                _io->run(); 
+                _io.run(); 
             }
             void stopIOService()
             {
@@ -41,7 +41,7 @@ namespace co {
             }
 
         private:
-            boost::asio::io_service* _io;
+            boost::asio::io_service& _io;
             boost::asio::io_service::work* _work;
         };
     }
@@ -76,7 +76,7 @@ void Treecast::updateConfig(TreecastConfig const& config)
 Treecast::Treecast( TreecastConfig const& config)
 : _config(config) 
 , _messageRecordHandler()
-, _ioThread( new detail::TimerThread( &_io ) )
+, _ioThread( new detail::TimerThread( _io ) )
 , _pingTimer( _io )
 , _resendTimer( _io )
 , _needToStartTimers( true )

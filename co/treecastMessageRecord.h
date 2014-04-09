@@ -19,7 +19,7 @@ typedef lunchbox::RefPtr<TreecastMessageRecord> TreecastMessageRecordPtr;
 struct TreecastMessageRecord : public lunchbox::Referenced
 {
   public:
-    static TreecastMessageRecordPtr create(size_t byteCount, size_t pieceCount, std::vector<NodeID> const& nodes);
+    static TreecastMessageRecordPtr create(size_t byteCount, size_t pieceCount, std::vector<NodeID> const& inNodes);
     TreecastMessageRecord(size_t byteCount, size_t pieceCount, std::vector<NodeID> const& nodes);
     ~TreecastMessageRecord();
     bool isFullyAcknowledged( std::vector<NodeID> const& childNodes );
