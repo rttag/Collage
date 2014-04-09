@@ -216,9 +216,8 @@ public:
     CommandThread* commandThread;
     TreecastThread* treecastThread;
 
-    Treecast treeCaster;
-
     lunchbox::Lockable< lunchbox::Servus > service;
+    Treecast treeCaster;
 };
 }
 
