@@ -6,12 +6,29 @@
 
 #include <lunchbox/types.h>
 #include <lunchbox/lock.h>
+#include <boost/asio.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/system/error_code.hpp>
+#define MAX_MESSAGE_BUFF_SIZE 64
 
 namespace co {
 
-class TreecastHeader;
+namespace detail 
+{
+    class TimerThread;
+}
+
+class ScatterHeader;
 class AllgatherHeader;
-typedef TreecastHeader ScatterHeader;
+//typedef TreecastHeader ScatterHeader;
+typedef stde::hash_map<UUID,  std::vector<const uint8_t> > DataBuffMap;
+typedef DataBuffMap::iterator DataBuffMapIt;
+//typedef DataBuffMap::const_iterator DataBuffMapCIt;
+typedef std::list< std::pair<UUID, boost::posix_time::ptime > > DataTimeQueue;
+typedef DataTimeQueue::iterator DataTimeQueueIt;
+//typedef stde::hash_map<UUID, int64_t > DataTimerMap;
+//typedef DataTimerMap::iterator DataTimerMapIt;
+//typedef std::vector< std::pair<UUID, co::Array<const uint8_t> > > DataBuffVec;
 template<typename T> class Array;
 
 //! Struct representing the configuration of Treecast
@@ -44,7 +61,7 @@ public:
 
     void shutdown();
 
-    void send(lunchbox::Bufferb& data, uint32_t resendNr, Nodes const& nodes);
+    void send(lunchbox::Bufferb& data, Nodes const& nodes);
     //@}
 
     //! Used for updating the configuration at runtime
@@ -64,6 +81,9 @@ public:
     //!
     //! \throw nil doesn't throw
     Treecast(TreecastConfig const& config);
+
+    //! Dtor
+    ~Treecast();
 
     void setLocalNode(LocalNode* localNode);
 
@@ -100,6 +120,15 @@ public:
     //! \throw nil doesn't throw
     void onAllgatherCommand(ICommand& data);
 
+    void onAcknowledgeCommand(ICommand& command);
+
+    void onSendCommand(ICommand& data);
+
+    uint32_t getRetryTimeout();
+
+    void pingNodes( const boost::system::error_code& e );
+
+    void resendBufferedMessage( const boost::system::error_code& e );
 
 private:
     //! Checks if a message has been fully received. If yes, it calls the user callback with the message,
@@ -109,7 +138,7 @@ private:
     //! \param resendNr The resendNr that we were triggered with
     //!
     //! \throw nil doesn't throw
-    void checkForFinished(UUID const& messageId, uint32_t resendNr);
+    void checkForFinished(UUID const& messageId, bool needDispatch);
 
     //! Used for sending a message as part of the multicast operation, retrying a few times when necessary.
     //!
@@ -122,8 +151,23 @@ private:
     //! \param retryCounter A counter which should start at 0 and is incremented by the recursive calls
     //!
     //! \throw nil doesn't throw
-    void _send(NodeID destinationId, TreecastHeader const& header, Array<const uint8_t> const& data);
+    void _send(NodeID destinationId, ScatterHeader const& header, Array<const uint8_t> const& data);
 
+    void _executeSend( ScatterHeader& header, lunchbox::Bufferb const& data );
+
+    void _filterNodeList( std::vector<NodeID>& nodes );
+
+    void _printNodes( const std::vector<NodeID>& nodes );
+
+    void _deleteMessageFromTimeQueue( UUID const messageId );
+
+    void _resetTimers();
+    
+    void _checkTimers();
+
+    void _updateBlackNodeList( std::vector<NodeID>& nodes );
+
+    boost::posix_time::ptime _getCurrentTimeMilliseconds();
     //! Used for writing a newly received piece of data into the result buffer
     //!
     //! This function makes sure that no one is trying to access the same piece of the data at the same time and
@@ -210,5 +254,16 @@ private:
     lunchbox::Lock                                               _configUpdateMutex;
     TreecastMessageRecordHandler                                 _messageRecordHandler;
     LocalNode*                                                   _localNode;
+    DataTimeQueue                                                _dataTimeQueue;
+    boost::asio::io_service                                      _io;
+    boost::asio::deadline_timer                                  _pingTimer;
+    boost::asio::deadline_timer                                  _resendTimer;
+    bool                                                         _needToStartTimers;
+    std::deque<lunchbox::UUID>                                   _lastDispatchedMessages;
+    std::set<NodeID>                                             _blackListNodes;
+    detail::TimerThread*                                         _ioThread;
+    lunchbox::Lock                                               _mutex;
+    lunchbox::SpinLock                                           _spinLock;
+    lunchbox::Monitor<bool>                                      _queueMonitor;
 };
 }

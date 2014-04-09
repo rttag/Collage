@@ -275,7 +275,7 @@ LocalNode::LocalNode( const uint32_t type )
     registerCommand( CMD_NODE_REMOVE_LISTENER,
                      CmdFunc( this, &LocalNode::_cmdRemoveListener ), 0 );
     registerCommand( CMD_NODE_PING,
-                     CmdFunc( this, &LocalNode::_cmdPing ), queue );
+                     CmdFunc( this, &LocalNode::_cmdPing ), 0 );
     registerCommand( CMD_NODE_PING_REPLY,
                      CmdFunc( this, &LocalNode::_cmdDiscard ), 0 );
     registerCommand( CMD_NODE_COMMAND,
@@ -288,6 +288,10 @@ LocalNode::LocalNode( const uint32_t type )
                      CmdFunc( this, &LocalNode::_cmdTreecastSmallScatter ),trQ);
     registerCommand( CMD_NODE_TREECAST_SCATTER,
                      CmdFunc( this, &LocalNode::_cmdTreecastScatter ), trQ);
+    registerCommand( CMD_NODE_TREECAST_SEND,
+                     CmdFunc( this, &LocalNode::_cmdTreecastSend ),trQ);
+    registerCommand( CMD_NODE_TREECAST_ACKNOWLEDGE, 
+                     CmdFunc( this, &LocalNode::_cmdTreecastAcknowledge ), trQ);
     registerCommand( CMD_NODE_STOP_TREECAST,
                      CmdFunc( this, &LocalNode::_cmdStopTreecastThread ),trQ);
 
@@ -2120,9 +2124,23 @@ bool LocalNode::_cmdTreecastScatter( ICommand& command )
     return true;
 }
 
+bool LocalNode::_cmdTreecastAcknowledge( ICommand& command ) 
+{
+    LBASSERT( _impl->treecastThread->isCurrent() );
+    _impl->treeCaster.onAcknowledgeCommand( command );
+    return true;
+}
+
+bool LocalNode::_cmdTreecastSend( ICommand& command )
+{
+    LBASSERT( _impl->treecastThread->isCurrent() );
+    _impl->treeCaster.onSendCommand(command);
+    return true;
+}
+
 void LocalNode::treecast( lunchbox::Bufferb& data, Nodes const& nodes )
 {
-    _impl->treeCaster.send(data, 0, nodes);
+    _impl->treeCaster.send(data, nodes);
 }
 
 

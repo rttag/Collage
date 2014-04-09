@@ -98,8 +98,12 @@ inline bool useTreecast( const Nodes& nodes )
     Connections connections;
     gatherConnections(nodes, connections);
 
-    if ( nodes.size() != connections.size() )
-        return false;
+    for ( size_t i = 0; i < connections.size(); ++i ) 
+    {
+        ConnectionPtr connection = connections[i];
+        if( connection->getDescription()->type == CONNECTIONTYPE_RSP )
+            return false;
+    }
 
     return nodes.size() >= 
                 Global::getIAttribute( Global::IATTR_TREECAST_THRESHOLD );

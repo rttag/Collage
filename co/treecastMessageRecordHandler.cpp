@@ -12,62 +12,76 @@ TreecastMessageRecordHandler::TreecastMessageRecordHandler()
 
 }
 
-co::TreecastMessageRecordPtr TreecastMessageRecordHandler::createOrUpdateMessageRecord(
-    UUID const& messageId, uint32_t resendNr, std::vector<NodeID> const & nodes,
-    size_t byteCount, size_t pieceCount)
+size_t TreecastMessageRecordHandler::mapSize()
 {
+    return m_treecastMessageRecordMap.size();
+}
+
+void TreecastMessageRecordHandler::deleteRecord( UUID const& messageId )
+{
+    lunchbox::ScopedFastWrite lock( m_SpinLock );
+    TreecastMessageRecordMap_T::iterator it = m_treecastMessageRecordMap.find( messageId );
+    if( it != m_treecastMessageRecordMap.end() )
+        m_treecastMessageRecordMap.erase(it);
+    else
+        LBLOG( LOG_TC ) << "HORROR: Wasn't able to find messageId: "<< messageId <<" in my map";
+}
+
+co::TreecastMessageRecordPtr TreecastMessageRecordHandler::getRecordByID( UUID const& messageId )
+{
+    lunchbox::ScopedFastWrite lock( m_SpinLock );
+    TreecastMessageRecordMap_T::iterator it = m_treecastMessageRecordMap.find( messageId );
+    if( it != m_treecastMessageRecordMap.end() )
+    {
+        return it->second;
+    }
+    return TreecastMessageRecordPtr();
+}
+
+co::TreecastMessageRecordPtr TreecastMessageRecordHandler::createOrUpdateMessageRecord(
+    UUID const& messageId, std::vector<NodeID> const & nodes, size_t byteCount, size_t pieceCount )
+{
+    lunchbox::ScopedFastWrite lock(m_SpinLock);
     TreecastMessageRecordPtr record;
-    lunchbox::ScopedWrite lock(m_mutex);
-    MulticastMessageRecordMap_T::iterator messageIt = m_multicastMessageRecordMap.find(messageId);
-    if (messageIt == m_multicastMessageRecordMap.end())
+    
+    TreecastMessageRecordMap_T::iterator messageIt = m_treecastMessageRecordMap.find(messageId);
+    if (messageIt == m_treecastMessageRecordMap.end() 
+        ||    nodes.size() != (messageIt->second)->state.size() ) 
     {
         // The message is new to me
-        m_multicastMessageRecordMap[messageId] = record =
-            TreecastMessageRecord::create(byteCount, pieceCount, resendNr, nodes);
-        LBLOG( LOG_TC ) << "CREATED new messageRecord: messageId: " << messageId << ", resendNr: " << resendNr
-                  << ", byteCount: " << byteCount << ", pieceCount: " << pieceCount  << std::endl;
+        m_treecastMessageRecordMap[messageId] = record =
+            TreecastMessageRecord::create(byteCount, pieceCount, nodes);
+        LBLOG( LOG_TC ) << "CREATED new messageRecord: messageId: " << messageId << ", byteCount: " << byteCount
+            << ", pieceCount: " << pieceCount  << std::endl;
     }
     else
     {
         // The message is already known. This could be a re-send, or an allgather message arrived earlier
         // In either case, we should make sure that the stored metadata is up-to-date.
         record = messageIt->second;
+        
         LBASSERT(byteCount == record->buffer.getNumBytes());
         LBASSERT(pieceCount == record->state.size());
-        if ( record->resendNr < resendNr )
-        {
-            record->resendNr = resendNr;
-        }
-        else if (record->resendNr > resendNr)
-        {
-            LBWARN << "This is strange, I got a resend with a lower resendNr for a message. Skipping." << std::endl;
-        }
     }
     return record;
 }
 
 TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRecord(UUID const& messageId,
-    uint32_t resendNr, bool doCheck)
+     bool doCheck)
 {
-    LBLOG( LOG_TC ) << "START cleaning up message record: messageId: " << messageId << ", resendNr: " << resendNr
-              << ", doCheck: " << doCheck << std::endl;
+    LBLOG( LOG_TC ) << "START cleaning up message record: messageId: " << messageId << ", doCheck: " << doCheck << std::endl;
     TreecastMessageRecordPtr record;
     {
-        lunchbox::ScopedWrite lock(m_mutex);
-        MulticastMessageRecordMap_T::iterator mapIt =
-            m_multicastMessageRecordMap.find(messageId);
-        if (m_multicastMessageRecordMap.end() == mapIt)
+        lunchbox::ScopedFastWrite lock( m_SpinLock );
+        TreecastMessageRecordMap_T::iterator mapIt =
+            m_treecastMessageRecordMap.find(messageId);
+        if (m_treecastMessageRecordMap.end() == mapIt)
         {
             LBLOG( LOG_TC ) << "I just got a cleanup request on an unknown multicast message." << std::endl;
             return TreecastMessageRecordPtr();
         }
         // Let's check the resendNr
         record = mapIt->second;
-        if (record->resendNr != resendNr)
-        {
-            LBLOG( LOG_TC ) << "Wrong resendNr on cleanup of a multicast message record, skipping." << std::endl;
-            return TreecastMessageRecordPtr();
-        }
         if (doCheck)
         {
             // Let's see if we have all pieces
@@ -82,16 +96,56 @@ TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRec
                 }
             }
         }
-        // Delete the record
-        m_multicastMessageRecordMap.erase(mapIt);
-        LBLOG( LOG_TC ) << "FINISHED cleaning up message record: messageId: " << messageId << ", resendNr: " << resendNr
-                  << ", doCheck: " << doCheck << std::endl;
+        const size_t rank = calculateRank(record->nodes);
+        LBLOG( LOG_TC ) << "FINISHED cleaning up message record: messageId: " << messageId << ", doCheck: " << doCheck << std::endl;
+        //LBERROR << "Node[ " << rank <<"] got message :" << messageId <<std::endl;
     }
     // Calculate rank
-    const size_t rank = calculateRank(record->nodes);
+    //const size_t rank = calculateRank(record->nodes);
     // Return the record, so that the user may do one last thing with it before it disappears
     return record;
 }
+
+size_t TreecastMessageRecordHandler::getParentRank( size_t rank ) const
+{
+    //root doesn't have any children
+    if( rank == 0 )
+        return 0;
+    size_t cur_parent = 0;
+    while( true )
+    {
+        size_t low_rank = 0x1;
+        size_t high_rank = low_rank<<1;
+
+        for( ;!(low_rank <= rank && high_rank> rank); low_rank <<=1, high_rank <<=1  );
+
+        if( low_rank >= rank )
+            break;
+        else
+        {
+            cur_parent += low_rank;
+            rank -= low_rank;
+        }
+    }
+
+    return cur_parent;
+}
+
+void TreecastMessageRecordHandler::getChildNodes( std::vector<NodeID> const& nodes, std::vector<NodeID>& childNodes )
+{
+    const size_t rank = calculateRank( nodes );
+    const size_t parent = getParentRank( rank );
+    size_t high_rank = (rank != 0)?( 2*rank - parent  ):( nodes.size() );
+    high_rank = std::min( high_rank, nodes.size() );
+    size_t next_child_rank = 0x1;
+    while ( rank + next_child_rank < high_rank )
+    {
+        size_t childIdx = rank + next_child_rank;
+        childNodes.push_back( nodes[childIdx] );
+        next_child_rank <<= 1;
+    }
+}
+
 
 size_t TreecastMessageRecordHandler::calculateRank(std::vector<NodeID> const& nodes) const
 {

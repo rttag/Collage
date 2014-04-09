@@ -4,13 +4,47 @@
 #include "oCommand.h"
 #include "objectDataICommand.h"
 #include "log.h"
-
+#include "global.h"
 #include <lunchbox/scopedMutex.h>
 #include <lunchbox/uuid.h>
+#include <boost/bind/bind.hpp>
+#include <lunchbox/thread.h>
+#include <boost/asio/time_traits.hpp>
+#include <co/connectionDescription.h>
 
 #include <algorithm>
 
+typedef boost::asio::time_traits<boost::posix_time::ptime> time_traits_t; 
+
 namespace co {
+
+
+    namespace detail
+    {
+        class TimerThread : public lunchbox::Thread
+        {
+        public:
+            TimerThread( boost::asio::io_service* io ) : _io(io), _work( new boost::asio::io_service::work(*io) ) {}
+            virtual bool init()
+            {
+                setName( std::string("TimerTreeCastThread") );
+                return true;
+            }
+            virtual void run() 
+            {
+                _io->run(); 
+            }
+            void stopIOService()
+            {
+                delete _work;
+                _work = 0;
+            }
+
+        private:
+            boost::asio::io_service* _io;
+            boost::asio::io_service::work* _work;
+        };
+    }
 
 TreecastConfig::TreecastConfig()
 : smallMessageThreshold(12*1024)
@@ -42,10 +76,25 @@ void Treecast::updateConfig(TreecastConfig const& config)
 Treecast::Treecast( TreecastConfig const& config)
 : _config(config) 
 , _messageRecordHandler()
+, _ioThread( new detail::TimerThread( &_io ) )
+, _pingTimer( _io )
+, _resendTimer( _io )
+, _needToStartTimers( true )
+, _queueMonitor( true )
+
 {
+    _ioThread->start();
 }
 
-void Treecast::send(lunchbox::Bufferb& data, uint32_t resendNr, Nodes const& nodes)
+Treecast::~Treecast()
+{
+    _pingTimer.cancel();
+    _resendTimer.cancel();
+    _ioThread->stopIOService();
+    _ioThread->join();
+}
+
+void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
 {
     LBASSERT(!nodes.empty());
 
@@ -69,6 +118,9 @@ void Treecast::send(lunchbox::Bufferb& data, uint32_t resendNr, Nodes const& nod
     size_t node_count_after_unique = myNodes.size();
     LBASSERTINFO(node_count_before_unique == node_count_after_unique,
         "The destination node list contains duplicate entries.");
+    _updateBlackNodeList( myNodes );
+    _filterNodeList( myNodes );
+    size_t rank = _messageRecordHandler.calculateRank( myNodes );
     // Let's check that the user complied to the protocol and didn't include the local node in the myNodes vector
     std::vector<NodeID>::const_iterator it = std::lower_bound(myNodes.begin()+1, myNodes.end(), myNodes[0]);
     LBASSERT(it == myNodes.end() || *it != myNodes[0]);
@@ -79,35 +131,248 @@ void Treecast::send(lunchbox::Bufferb& data, uint32_t resendNr, Nodes const& nod
     ScatterHeader header;
     header.byteCount = byteCount;
     header.messageId = msgID;
-    header.resendNr = resendNr;
     header.nodes = myNodes;
-
+    
     LBLOG( LOG_TC ) << "send message " << msgID << " with " << data.getNumBytes() 
                     << "bytes of data" << std::endl;
+    _queueMonitor.waitEQ( true );
+    lunchbox::ScopedWrite lock( _mutex );
+    _messageRecordHandler.createOrUpdateMessageRecord( msgID, myNodes, byteCount, 0 );
+    TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( msgID );
+    memcpy( record->buffer.getData(), data.getData(), data.getSize() );
 
-    bool smallMessage = (byteCount <= _config.smallMessageThreshold);
-    if (smallMessage)
+    _dataTimeQueue.push_back( std::make_pair(msgID, _getCurrentTimeMilliseconds() ) );
+    _queueMonitor = _dataTimeQueue.size() < MAX_MESSAGE_BUFF_SIZE;
+    _checkTimers();
+    
+    _executeSend(header, data);
+}
+
+boost::posix_time::ptime Treecast::_getCurrentTimeMilliseconds() 
+{
+    boost::posix_time::ptime micro_time = boost::posix_time::microsec_clock::local_time();
+    boost::posix_time::time_duration duration( micro_time.time_of_day() );
+    boost::posix_time::time_duration milli_duration = boost::posix_time::milliseconds( duration.total_milliseconds() );
+    return boost::posix_time::ptime( micro_time.date(), milli_duration );
+}
+
+void Treecast::_checkTimers()
+{
+    if( _needToStartTimers )
     {
-        processSmallScatterCommand(header, data);
-    }
-    else
-    {
-        processScatterCommand(header, data);
+        _resetTimers();
+        _needToStartTimers = false;
     }
 }
 
-void Treecast::checkForFinished(UUID const& messageId, uint32_t resendNr)
+void Treecast::_executeSend( ScatterHeader& header, lunchbox::Bufferb const& data ) 
 {
+    OCommand cmd( _localNode, _localNode, CMD_NODE_TREECAST_SEND );
+    Array<const uint8_t> payload( data.getData(), data.getSize());
+    cmd << header << data.getSize() << payload;
+}
+
+void Treecast::onSendCommand(ICommand& command)
+{
+    ScatterHeader header;
+    lunchbox::Bufferb payload;
+    command >> header >> payload;
+    _updateBlackNodeList( header.nodes );
+    _filterNodeList( header.nodes );
+    bool smallMessage = (header.byteCount <= _config.smallMessageThreshold);
+    if (smallMessage)
+    {
+        processSmallScatterCommand(header, payload);
+    }
+    else
+    {
+        processScatterCommand(header, payload);
+    }
+    _checkTimers();
+}
+
+//list of nodes we want to filter should be sorted
+void Treecast::_filterNodeList( std::vector<NodeID>& nodes ) 
+{
+    std::vector<NodeID> newNodes;
+    newNodes.reserve( nodes.size() );
+    std::set<NodeID>::iterator it = _blackListNodes.begin();
+    for( int i = 0; i < nodes.size(); ++i ) 
+    {
+        NodeID nodeId = nodes[i];
+        NodePtr node = _localNode->getNode( nodeId );
+        if( node && (it == _blackListNodes.end() || *it != nodeId) ) 
+        {
+            newNodes.push_back( nodeId );
+        }
+        else if( *it <= nodeId && it != _blackListNodes.end() ) 
+        {
+            it++;
+        } 
+    }
+    nodes = newNodes;
+}
+
+void Treecast::_printNodes( const std::vector<NodeID>& nodes ) 
+{
+    for( size_t i = 0; i < nodes.size(); ++i ) 
+    {
+        NodeID nodeId = nodes[i];
+        NodePtr node = _localNode->getNode(nodeId);
+        LBERROR << node->getConnectionDescriptions().front() << std::endl;
+    }
+}
+
+void Treecast::_updateBlackNodeList( std::vector<NodeID>& nodes ) 
+{
+    for( int i = 1; i < nodes.size(); ++i ) 
+    {
+        NodeID nodeId = nodes[i];
+        NodePtr node = _localNode->getNode( nodeId );
+        if( node ) {
+            //if node is not active, put in into the black list
+            int64_t lastTime = _localNode->getTime64() - node->getLastReceiveTime();
+            if( lastTime > co::Global::getTimeout() 
+                || !node->isConnected() ) 
+                _blackListNodes.insert( nodeId );
+        }
+        else 
+            _blackListNodes.insert( nodeId );
+    }
+}
+
+//ping nodes of the first message in the time queue
+void Treecast::pingNodes( const boost::system::error_code& e ) 
+{
+    if( e == boost::asio::error::operation_aborted )
+        return;
+    lunchbox::ScopedWrite lock( _mutex );
+
+    if( _dataTimeQueue.empty() )
+        return;
+    UUID messageId = _dataTimeQueue.front().first;
+
+    TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
+    std::vector<NodeID>& nodes = record->nodes;
+    for( int i = 0; i < nodes.size(); ++i ) 
+    {
+        NodeID nodeId = nodes[i];
+        NodePtr node = _localNode->getNode( nodeId );
+        if( node )
+            _localNode->ping( node );
+    }
+}
+
+void Treecast::resendBufferedMessage( const boost::system::error_code& e ) 
+{
+    if( e == boost::asio::error::operation_aborted )
+        return;
+    lunchbox::ScopedWrite lock( _mutex );
+    if( _dataTimeQueue.empty() )
+        return;
+    
+    size_t q_size = _dataTimeQueue.size();
+    for( size_t i = 0; i < q_size; ++i ) 
+    {
+        UUID messageId = _dataTimeQueue.front().first;
+        _dataTimeQueue.pop_front();
+        TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
+        std::vector<NodeID>& nodes = record->nodes;
+        _updateBlackNodeList( nodes );
+        //update nodes list
+        _filterNodeList( nodes );
+        /*LBERROR << "Resend is done!" <<std::endl;
+        _printNodes( nodes );*/
+        LBERROR << "Resend message: "<< messageId <<std::endl;
+        //if we don't have any nodes to send to, return
+        if( nodes.empty() )
+            return;
+
+        lunchbox::Bufferb& data = record->buffer;
+        size_t byteCount = data.getSize();
+        ScatterHeader header;
+        header.byteCount = byteCount;
+        header.messageId = messageId;
+        header.nodes = nodes;
+        //push message again into time queue, as we don't know if it will succeed 
+        _dataTimeQueue.push_back( std::make_pair( messageId, _getCurrentTimeMilliseconds() ) );
+
+        _needToStartTimers = true;
+        _executeSend( header, data );
+    }
+    LBERROR << "Resend is done!" <<std::endl;
+}
+
+void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
+{
+    lunchbox::ScopedWrite lock( _mutex );
     TreecastMessageRecordPtr record =
-        _messageRecordHandler.checkAndCleanUpMessageRecord(messageId, resendNr, true);
+        _messageRecordHandler.checkAndCleanUpMessageRecord(messageId, true);
 
     if (record)
     {
-        BufferPtr buffer = _localNode->allocBuffer( record->buffer.getSize() );
-        buffer->replace( record->buffer.getData(), record->buffer.getSize() );
-        ObjectDataICommand cmd( _localNode, _localNode->getNode( record->nodes[0] ), buffer, false );
-        _localNode->dispatchCommand( cmd );
+        std::vector<NodeID> childNodes;
+        _messageRecordHandler.getChildNodes( record->nodes, childNodes );
+        //send ACK to the parent
+        if( record->isFullyAcknowledged( childNodes ) ) 
+        {
+            LBERROR << "TREECAST_ACK: Message " << messageId << std::endl;
+            const size_t rank = _messageRecordHandler.calculateRank( record->nodes );
+            const size_t parentRank = _messageRecordHandler.getParentRank( rank );
+            NodePtr parentNode = _localNode->getNode( record->nodes[parentRank] );
+
+            TreecastHeader header;
+            header.messageId = messageId;
+            header.nodes = record->nodes;
+            _messageRecordHandler.deleteRecord( messageId );
+            OCommand command( parentNode->send( CMD_NODE_TREECAST_ACKNOWLEDGE ) );
+            command << header << _localNode->getNodeID();
+
+        }
+        if( needDispatch && std::find( _lastDispatchedMessages.begin(), _lastDispatchedMessages.end(), messageId ) == _lastDispatchedMessages.end() ) 
+        {
+            BufferPtr buffer = _localNode->allocBuffer( record->buffer.getSize() );
+            buffer->replace( record->buffer.getData(), record->buffer.getSize() );
+            //check if buffer is ok
+            ObjectDataICommand cmd( _localNode, _localNode->getNode( record->nodes[0] ), buffer, false );
+            _localNode->dispatchCommand( cmd );
+            _lastDispatchedMessages.push_back( messageId );
+            if( _lastDispatchedMessages.size() >= MAX_MESSAGE_BUFF_SIZE )
+                _lastDispatchedMessages.pop_front();
+        }
     }
+}
+
+void Treecast::_deleteMessageFromTimeQueue( UUID const messageId ) 
+{
+    for( DataTimeQueueIt it = _dataTimeQueue.begin(); it != _dataTimeQueue.end(); ) 
+    {
+        UUID curMessageId = it->first;
+        if( curMessageId == messageId ) 
+        {
+            it = _dataTimeQueue.erase( it );
+            break;
+        }
+        else 
+            ++it;
+    }
+}
+
+void Treecast::_resetTimers() 
+{
+    //no messages
+    lunchbox::ScopedWrite lock( _mutex );
+    if( _dataTimeQueue.empty() )
+        return;
+    //boost::posix_time::ptime start = ( _dataTimeQueue.front() ).second ;
+    //boost::posix_time::time_duration duration = boost::posix_time::milliseconds( co::Global::getTimeout() );
+    //boost::posix_time::ptime resendDeadline = start + duration;
+    _pingTimer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds( co::Global::getKeepaliveTimeout() ) ) );
+    _resendTimer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds( co::Global::getTimeout() ) ) );
+    //_resendTimer.expires_at( resendDeadline );
+
+    _pingTimer.async_wait(  BOOST_BIND( &Treecast::pingNodes, this, boost::asio::placeholders::error ) );
+    _resendTimer.async_wait( BOOST_BIND( &Treecast::resendBufferedMessage, this, boost::asio::placeholders::error ) );
 }
 
 void Treecast::onScatterCommand(ICommand& command)
@@ -158,11 +423,59 @@ void Treecast::onAllgatherCommand(ICommand& command)
     processAllgatherCommand(header, payload);
 }
 
-void Treecast::_send(NodeID destinationId, TreecastHeader const& header, Array<const uint8_t> const& data )
+void Treecast::onAcknowledgeCommand(ICommand& command)
+{
+    lunchbox::ScopedWrite lock( _mutex );
+    TreecastHeader header;
+    NodeID childId;
+    command >> header >> childId ;
+    UUID messageId = header.messageId;
+    size_t rank = _messageRecordHandler.calculateRank( header.nodes );
+    TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
+    record->ackNodes.insert( childId );
+    //if we are not the master propagate ACK message further
+    if( rank != 0 ) 
+    {
+        //we are not a root - forward ACK further
+        checkForFinished( messageId, false );
+    }
+    else 
+    {
+        // if we are the root we decide if we need resend or not
+        std::vector<NodeID> childNodes;
+        _messageRecordHandler.getChildNodes( header.nodes, childNodes );
+        _updateBlackNodeList( childNodes );
+        sort( childNodes.begin(), childNodes.end() );
+        _filterNodeList( childNodes );
+        if( record && record->isFullyAcknowledged( childNodes ) ) //all children send ACK to this message
+        {
+            LBERROR << "Treecast Master got ACK message: " << messageId << std::endl;
+            _messageRecordHandler.deleteRecord( messageId );
+            
+            //bool restartTimers = _dataTimeQueue.front().first == messageId;
+            _deleteMessageFromTimeQueue( messageId );
+            _queueMonitor = _messageRecordHandler.mapSize() < MAX_MESSAGE_BUFF_SIZE;
+            if( _dataTimeQueue.size() != 0 ) 
+                _resetTimers();
+            else 
+            {
+                _pingTimer.cancel();
+                _resendTimer.cancel();
+                _needToStartTimers = true;
+            }
+        }
+    }
+}
+
+void Treecast::_send( NodeID destinationId, ScatterHeader const& header, Array<const uint8_t> const& data )
 {
     NodePtr destNode = _localNode->getNode( destinationId );
-    if ( !destNode.isValid() )
+    if ( !destNode )
         destNode = _localNode->connect( destinationId );
+    if( !destNode ) {
+        LBERROR << "Can't connect to node: " <<destinationId << std::endl;
+        return;
+    }
     uint64_t size = data.getNumBytes();
     OCommand cmd(destNode->send( header.cmd ));
     cmd << header << size << data;
@@ -187,7 +500,7 @@ void Treecast::writeOnePiece(TreecastMessageRecordPtr record, size_t pos,
     record->state[pos] = TREECAST_PIECE_STATE_FULL;
 }
 
-void Treecast::propagateScatter(TreecastHeader & header, lunchbox::Bufferb const& data, uint64_t receivedSize, uint64_t pieceSize, 
+void Treecast::propagateScatter(ScatterHeader & header, lunchbox::Bufferb const& data, uint64_t receivedSize, uint64_t pieceSize, 
                                 size_t nodeCount, size_t rank, bool smallMessage)
 {
     // Let's set up the mask for the next operation, propagating the scatter to the children of this node in the tree.
@@ -254,7 +567,6 @@ void Treecast::initiateAllgather(ScatterHeader& header, lunchbox::Bufferb const&
     AllgatherHeader allgatherHeader;
     allgatherHeader.byteCount = header.byteCount;
     allgatherHeader.messageId = header.messageId;
-    allgatherHeader.resendNr = header.resendNr;
     allgatherHeader.nodes = header.nodes;
     allgatherHeader.pieceNr = pieceNr;
     allgatherHeader.cmd = CMD_NODE_TREECAST_ALLGATHER;
@@ -293,12 +605,12 @@ void Treecast::processScatterCommand(ScatterHeader& header, lunchbox::Bufferb co
     // Initiate the allgather
     initiateAllgather(header, data, receivedSize, pieceSize, rank);
 
-    TreecastMessageRecordPtr record;
     // If I am the initiator, I don't need to get the data, I have it already
     if (0 != rank)
     {
         // Make sure there is a record for this message
-        record = _messageRecordHandler.createOrUpdateMessageRecord(header.messageId, header.resendNr,
+        lunchbox::ScopedWrite lock( _mutex );
+        TreecastMessageRecordPtr record = _messageRecordHandler.createOrUpdateMessageRecord(header.messageId,
             header.nodes, header.byteCount, pieceCount);
 
         // We could save all received pieces now, but it would complicate handling of
@@ -313,7 +625,7 @@ void Treecast::processScatterCommand(ScatterHeader& header, lunchbox::Bufferb co
     if (0 != rank)
     {
         // If we have all pieces already, notify the user about the newly arrived message
-        checkForFinished(header.messageId, header.resendNr);
+        checkForFinished(header.messageId, true);
     }
 }
 
@@ -332,12 +644,12 @@ void Treecast::processSmallScatterCommand( ScatterHeader& header, lunchbox::Buff
     // Propagate the scatter
     propagateScatter(header, data, header.byteCount, header.byteCount, nodeCount, rank, true);
 
-    TreecastMessageRecordPtr record;
     // If I am the initiator, I don't need to get the data, I have it already
     if (0 != rank)
     {
         // Make sure there is a record for this message
-        record = _messageRecordHandler.createOrUpdateMessageRecord(header.messageId, header.resendNr,
+        lunchbox::ScopedWrite lock( _mutex );
+        TreecastMessageRecordPtr record = _messageRecordHandler.createOrUpdateMessageRecord(header.messageId,
             header.nodes, header.byteCount, 1);
 
         if (payload_size > 0)
@@ -354,7 +666,7 @@ void Treecast::processSmallScatterCommand( ScatterHeader& header, lunchbox::Buff
     if (0 != rank)
     {
         // If we have all pieces already, notify the user about the newly arrived message
-        checkForFinished(header.messageId, header.resendNr);
+        checkForFinished(header.messageId, true);
     }
 }
 
@@ -376,17 +688,18 @@ void Treecast::processAllgatherCommand(AllgatherHeader const& header, lunchbox::
     LBASSERT(rank != header.pieceNr);
     LBLOG( LOG_TC) << "Received allgather command. My rank is: " << rank << std::endl;
 
-    TreecastMessageRecordPtr record;
     // If I am the initiator, I don't need to get the data, I have it already
     if (0 != rank)
     {
         // Create message record if necessary
-        record = _messageRecordHandler.createOrUpdateMessageRecord(header.messageId, header.resendNr, header.nodes,
-            header.byteCount, pieceCount);
-        writeOnePiece(record, header.pieceNr, data.getData(), data.getSize(), header.pieceNr * pieceSize);
-
+        {
+            lunchbox::ScopedWrite lock( _mutex );
+            TreecastMessageRecordPtr record = _messageRecordHandler.createOrUpdateMessageRecord(header.messageId, header.nodes,
+                header.byteCount, pieceCount);
+            writeOnePiece(record, header.pieceNr, data.getData(), data.getSize(), header.pieceNr * pieceSize);
+        }
         // If we have all pieces already, notify the user about the newly arrived message
-        checkForFinished(header.messageId, header.resendNr);
+        checkForFinished(header.messageId, true);
     }
 }
 

@@ -574,6 +574,8 @@ class CommandThread; class TreecastThread;
         bool _cmdTreecastAllGather( ICommand& command );
         bool _cmdTreecastSmallScatter( ICommand& command );
         bool _cmdTreecastScatter( ICommand& command );
+        bool _cmdTreecastAcknowledge( ICommand& command );
+        bool _cmdTreecastSend( ICommand& command );
         bool _cmdStopTreecastThread( ICommand& command );
         bool _cmdDiscard( ICommand& ) { return true; }
         //@}

@@ -5,6 +5,7 @@
 #include <lunchbox/refptr.h>
 #include <lunchbox/referenced.h>
 #include <vector>
+#include <set>
 
 namespace co {
 enum TreecastState {
@@ -19,12 +20,13 @@ typedef lunchbox::RefPtr<TreecastMessageRecord> TreecastMessageRecordPtr;
 struct TreecastMessageRecord : public lunchbox::Referenced
 {
   public:
-    static TreecastMessageRecordPtr create(size_t byteCount, size_t pieceCount, uint32_t resendNr, std::vector<NodeID> const& nodes);
-    TreecastMessageRecord(size_t byteCount, size_t pieceCount, uint32_t resendNr, std::vector<NodeID> const& nodes);
+    static TreecastMessageRecordPtr create(size_t byteCount, size_t pieceCount, std::vector<NodeID> const& nodes);
+    TreecastMessageRecord(size_t byteCount, size_t pieceCount, std::vector<NodeID> const& nodes);
     ~TreecastMessageRecord();
+    bool isFullyAcknowledged( std::vector<NodeID> const& childNodes );
     lunchbox::Bufferb                  buffer;     //<! The buffer that stores the received pieces
     std::vector<lunchbox::a_int32_t>   state;      //<! Marks which parts of the message arrived already
     std::vector<NodeID>                nodes;      //<! The nodes participating in the communication
-    uint32_t                           resendNr;   //<! This number is incremented when the message is re-sent
+    std::set<NodeID>                   ackNodes;   //<! Nodes that have acknowledged this message
 };
 }

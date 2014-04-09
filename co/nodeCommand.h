@@ -73,6 +73,8 @@ namespace co
         CMD_NODE_TREECAST_SCATTER,
         CMD_NODE_TREECAST_SMALLSCATTER,
         CMD_NODE_TREECAST_ALLGATHER,
+        CMD_NODE_TREECAST_ACKNOWLEDGE,
+        CMD_NODE_TREECAST_SEND,
         CMD_NODE_STOP_TREECAST
         // check that not more than CMD_NODE_CUSTOM have been defined!
     };

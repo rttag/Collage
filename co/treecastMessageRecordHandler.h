@@ -14,15 +14,24 @@ class TreecastMessageRecordHandler
 {
   public:
     TreecastMessageRecordHandler( );
-    TreecastMessageRecordPtr createOrUpdateMessageRecord(UUID const& messageId,
-        uint32_t resendNr, std::vector<NodeID> const & nodes, size_t byteCount, size_t pieceCount);
-    TreecastMessageRecordPtr checkAndCleanUpMessageRecord(UUID const& messageId, uint32_t resendNr, bool doCheck);
-    size_t calculateRank(std::vector<NodeID> const& nodes) const;
-    void setLocalNode(LocalNode* localNode) { m_localNode = localNode;}
+    TreecastMessageRecordPtr createOrUpdateMessageRecord( UUID const& messageId,
+                             std::vector<NodeID> const & nodes, size_t byteCount, size_t pieceCount );
+    TreecastMessageRecordPtr checkAndCleanUpMessageRecord( UUID const& messageId, bool doCheck );
+    TreecastMessageRecordPtr getRecordByID( UUID const& messageId ) ;
+    size_t calculateRank( std::vector<NodeID> const& nodes ) const;
+    size_t getParentRank( size_t rank ) const;
+    size_t mapSize();
+    void getChildNodes( std::vector<NodeID> const& nodes, std::vector<NodeID>& childNodes );
+    void deleteRecord( UUID const& messageId );
+    //void updateRecordAckedNodes( UUID const& messageId, NodeID childId );
+
+    void setLocalNode( LocalNode* localNode ) { m_localNode = localNode;}
   private:
+    lunchbox::SpinLock                                            m_SpinLock;
     lunchbox::Lock                                                m_mutex;
     LocalNode*                                                    m_localNode;
-    typedef stde::hash_map<UUID, TreecastMessageRecordPtr> MulticastMessageRecordMap_T;
-    MulticastMessageRecordMap_T                                   m_multicastMessageRecordMap;
+    typedef stde::hash_map<UUID, TreecastMessageRecordPtr> TreecastMessageRecordMap_T;
+    typedef TreecastMessageRecordMap_T::iterator          MulticastMessageRecordMap_TIt;
+    TreecastMessageRecordMap_T                                   m_treecastMessageRecordMap;
 };
 }
