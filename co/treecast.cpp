@@ -75,10 +75,10 @@ void Treecast::updateConfig(TreecastConfig const& config)
 
 Treecast::Treecast( TreecastConfig const& config)
 : _config(config) 
-, _messageRecordHandler()
-, _ioThread( new detail::TimerThread( _io ) )
 , _pingTimer( _io )
 , _resendTimer( _io )
+, _messageRecordHandler()
+, _ioThread( new detail::TimerThread( _io ) )
 , _needToStartTimers( true )
 , _queueMonitor( true )
 
@@ -113,14 +113,9 @@ void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
 
     // Sort the rest of the myNodes vector for quicker lookup later
     std::sort(myNodes.begin()+1, myNodes.end());
-    size_t node_count_before_unique = myNodes.size();
     std::unique(myNodes.begin()+1, myNodes.end());
-    size_t node_count_after_unique = myNodes.size();
-    LBASSERTINFO(node_count_before_unique == node_count_after_unique,
-        "The destination node list contains duplicate entries.");
     _updateBlackNodeList( myNodes );
     _filterNodeList( myNodes );
-    size_t rank = _messageRecordHandler.calculateRank( myNodes );
     // Let's check that the user complied to the protocol and didn't include the local node in the myNodes vector
     std::vector<NodeID>::const_iterator it = std::lower_bound(myNodes.begin()+1, myNodes.end(), myNodes[0]);
     LBASSERT(it == myNodes.end() || *it != myNodes[0]);
@@ -197,7 +192,7 @@ void Treecast::_filterNodeList( std::vector<NodeID>& nodes )
     std::vector<NodeID> newNodes;
     newNodes.reserve( nodes.size() );
     std::set<NodeID>::iterator it = _blackListNodes.begin();
-    for( int i = 0; i < nodes.size(); ++i ) 
+    for( size_t i = 0; i < nodes.size(); ++i ) 
     {
         NodeID nodeId = nodes[i];
         NodePtr node = _localNode->getNode( nodeId );
@@ -225,7 +220,7 @@ void Treecast::_printNodes( const std::vector<NodeID>& nodes )
 
 void Treecast::_updateBlackNodeList( std::vector<NodeID>& nodes ) 
 {
-    for( int i = 1; i < nodes.size(); ++i ) 
+    for( size_t i = 1; i < nodes.size(); ++i ) 
     {
         NodeID nodeId = nodes[i];
         NodePtr node = _localNode->getNode( nodeId );
@@ -254,7 +249,7 @@ void Treecast::pingNodes( const boost::system::error_code& e )
 
     TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
     std::vector<NodeID>& nodes = record->nodes;
-    for( int i = 0; i < nodes.size(); ++i ) 
+    for( size_t i = 0; i < nodes.size(); ++i ) 
     {
         NodeID nodeId = nodes[i];
         NodePtr node = _localNode->getNode( nodeId );
@@ -617,7 +612,6 @@ void Treecast::processScatterCommand(ScatterHeader& header, lunchbox::Bufferb co
         // the allgather messages that arrive for those pieces, so I just don't save them now,
         // as we will receive them later anyway, through allgather. So let's just save
         // the first piece, where I will initiate the allgather.
-        size_t endSrcPos = std::min(pieceSize, data.getSize());
         writeOnePiece(record, rank, data.getData(), data.getSize(), rank * pieceSize);
     }
 

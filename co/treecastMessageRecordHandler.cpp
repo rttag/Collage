@@ -96,13 +96,9 @@ TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRec
                 }
             }
         }
-        const size_t rank = calculateRank(record->nodes);
         LBLOG( LOG_TC ) << "FINISHED cleaning up message record: messageId: " << messageId << ", doCheck: " << doCheck << std::endl;
         //LBERROR << "Node[ " << rank <<"] got message :" << messageId <<std::endl;
     }
-    // Calculate rank
-    //const size_t rank = calculateRank(record->nodes);
-    // Return the record, so that the user may do one last thing with it before it disappears
     return record;
 }
 
