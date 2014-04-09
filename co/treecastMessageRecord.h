@@ -2,7 +2,6 @@
 
 #include "types.h"
 
-#include <lunchbox/refptr.h>
 #include <lunchbox/referenced.h>
 #include <vector>
 #include <set>

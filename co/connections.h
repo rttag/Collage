@@ -105,7 +105,7 @@ inline bool useTreecast( const Nodes& nodes )
             return false;
     }
 
-    return nodes.size() >= 
+    return static_cast<int32_t>( nodes.size() ) >= 
                 Global::getIAttribute( Global::IATTR_TREECAST_THRESHOLD );
 }
 

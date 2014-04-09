@@ -20,10 +20,6 @@ namespace detail
 
 class ScatterHeader;
 class AllgatherHeader;
-//typedef TreecastHeader ScatterHeader;
-typedef stde::hash_map<UUID,  std::vector<const uint8_t> > DataBuffMap;
-typedef DataBuffMap::iterator DataBuffMapIt;
-//typedef DataBuffMap::const_iterator DataBuffMapCIt;
 typedef std::list< std::pair<UUID, boost::posix_time::ptime > > DataTimeQueue;
 typedef DataTimeQueue::iterator DataTimeQueueIt;
 //typedef stde::hash_map<UUID, int64_t > DataTimerMap;
