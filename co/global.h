@@ -102,6 +102,7 @@ namespace co
             IATTR_TIMEOUT_DEFAULT,       //!< @internal default timeout
             IATTR_OBJECT_COMPRESSION,    //!< @internal threshold to compress
             IATTR_TREECAST_THRESHOLD,    //!< @internal threshold when to use tc
+            IATTR_TREECAST_SMALLSCATTER_THRESHOLD, //!< @internal switch in tc between small and big scatter
             IATTR_ALL
         };
 

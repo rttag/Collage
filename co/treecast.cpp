@@ -47,7 +47,7 @@ namespace co {
     }
 
 TreecastConfig::TreecastConfig()
-: smallMessageThreshold(12*1024)
+: smallMessageThreshold( Global::getIAttribute( Global::IATTR_TREECAST_THRESHOLD ) )
 , blacklistSize(10)
 , baseTimeout(10000)
 , masterTimeoutPerMB(300)
@@ -114,7 +114,6 @@ void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
     // Sort the rest of the myNodes vector for quicker lookup later
     std::sort(myNodes.begin()+1, myNodes.end());
     std::unique(myNodes.begin()+1, myNodes.end());
-    _updateBlackNodeList( myNodes );
     _filterNodeList( myNodes );
     // Let's check that the user complied to the protocol and didn't include the local node in the myNodes vector
     std::vector<NodeID>::const_iterator it = std::lower_bound(myNodes.begin()+1, myNodes.end(), myNodes[0]);
@@ -172,8 +171,8 @@ void Treecast::onSendCommand(ICommand& command)
     ScatterHeader header;
     lunchbox::Bufferb payload;
     command >> header >> payload;
-    _updateBlackNodeList( header.nodes );
     _filterNodeList( header.nodes );
+    LBLOG( LOG_TC ) << "sending message " << header.messageId << " to " << header.nodes.size() << std::endl;
     bool smallMessage = (header.byteCount <= _config.smallMessageThreshold);
     if (smallMessage)
     {
@@ -187,10 +186,12 @@ void Treecast::onSendCommand(ICommand& command)
 }
 
 //list of nodes we want to filter should be sorted
-void Treecast::_filterNodeList( std::vector<NodeID>& nodes ) 
+bool Treecast::_filterNodeList( std::vector<NodeID>& nodes ) 
 {
     std::vector<NodeID> newNodes;
     newNodes.reserve( nodes.size() );
+    if( _blackListNodes.empty() )
+        return false;
     std::set<NodeID>::iterator it = _blackListNodes.begin();
     for( size_t i = 0; i < nodes.size(); ++i ) 
     {
@@ -205,17 +206,9 @@ void Treecast::_filterNodeList( std::vector<NodeID>& nodes )
             it++;
         } 
     }
+    bool sizeChanged =  nodes.size() != newNodes.size();
     nodes = newNodes;
-}
-
-void Treecast::_printNodes( const std::vector<NodeID>& nodes ) 
-{
-    for( size_t i = 0; i < nodes.size(); ++i ) 
-    {
-        NodeID nodeId = nodes[i];
-        NodePtr node = _localNode->getNode(nodeId);
-        LBERROR << node->getConnectionDescriptions().front() << std::endl;
-    }
+    return sizeChanged;
 }
 
 void Treecast::_updateBlackNodeList( std::vector<NodeID>& nodes ) 
@@ -270,15 +263,13 @@ void Treecast::resendBufferedMessage( const boost::system::error_code& e )
     for( size_t i = 0; i < q_size; ++i ) 
     {
         UUID messageId = _dataTimeQueue.front().first;
-        _dataTimeQueue.pop_front();
         TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
         std::vector<NodeID>& nodes = record->nodes;
         _updateBlackNodeList( nodes );
         //update nodes list
-        _filterNodeList( nodes );
-        /*LBERROR << "Resend is done!" <<std::endl;
-        _printNodes( nodes );*/
-        LBERROR << "Resend message: "<< messageId <<std::endl;
+        if( !_filterNodeList( nodes ))
+            continue;
+        LBLOG( LOG_TC ) << "Resend message: "<< messageId <<std::endl;
         //if we don't have any nodes to send to, return
         if( nodes.empty() )
             return;
@@ -291,11 +282,11 @@ void Treecast::resendBufferedMessage( const boost::system::error_code& e )
         header.nodes = nodes;
         //push message again into time queue, as we don't know if it will succeed 
         _dataTimeQueue.push_back( std::make_pair( messageId, _getCurrentTimeMilliseconds() ) );
+        _dataTimeQueue.pop_front();
 
         _needToStartTimers = true;
         _executeSend( header, data );
     }
-    LBERROR << "Resend is done!" <<std::endl;
 }
 
 void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
@@ -306,12 +297,13 @@ void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
 
     if (record)
     {
+        LBLOG( LOG_TC ) << "Received message: "<< messageId << std::endl;
         std::vector<NodeID> childNodes;
         _messageRecordHandler.getChildNodes( record->nodes, childNodes );
         //send ACK to the parent
         if( record->isFullyAcknowledged( childNodes ) ) 
         {
-            LBERROR << "TREECAST_ACK: Message " << messageId << std::endl;
+            LBLOG( LOG_TC ) << "TREECAST_ACK: Message " << messageId << std::endl;
             const size_t rank = _messageRecordHandler.calculateRank( record->nodes );
             const size_t parentRank = _messageRecordHandler.getParentRank( rank );
             NodePtr parentNode = _localNode->getNode( record->nodes[parentRank] );
@@ -331,8 +323,9 @@ void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
             //check if buffer is ok
             ObjectDataICommand cmd( _localNode, _localNode->getNode( record->nodes[0] ), buffer, false );
             _localNode->dispatchCommand( cmd );
+            LBLOG( LOG_TC ) << "Dispatched message: "<< messageId << std::endl;
             _lastDispatchedMessages.push_back( messageId );
-            if( _lastDispatchedMessages.size() >= MAX_MESSAGE_BUFF_SIZE )
+            if( _lastDispatchedMessages.size() > MAX_MESSAGE_BUFF_SIZE )
                 _lastDispatchedMessages.pop_front();
         }
     }
@@ -351,6 +344,7 @@ void Treecast::_deleteMessageFromTimeQueue( UUID const messageId )
         else 
             ++it;
     }
+    _queueMonitor = _dataTimeQueue.size() < MAX_MESSAGE_BUFF_SIZE;
 }
 
 void Treecast::_resetTimers() 
@@ -427,6 +421,9 @@ void Treecast::onAcknowledgeCommand(ICommand& command)
     UUID messageId = header.messageId;
     size_t rank = _messageRecordHandler.calculateRank( header.nodes );
     TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
+    //if the record has been ACKed already 
+    if( !record ) 
+        return;
     record->ackNodes.insert( childId );
     //if we are not the master propagate ACK message further
     if( rank != 0 ) 
@@ -439,17 +436,14 @@ void Treecast::onAcknowledgeCommand(ICommand& command)
         // if we are the root we decide if we need resend or not
         std::vector<NodeID> childNodes;
         _messageRecordHandler.getChildNodes( header.nodes, childNodes );
-        _updateBlackNodeList( childNodes );
         sort( childNodes.begin(), childNodes.end() );
-        _filterNodeList( childNodes );
         if( record && record->isFullyAcknowledged( childNodes ) ) //all children send ACK to this message
         {
-            LBERROR << "Treecast Master got ACK message: " << messageId << std::endl;
+            LBLOG( LOG_TC ) << "Treecast Master got ACK message: " << messageId << std::endl;
             _messageRecordHandler.deleteRecord( messageId );
             
             //bool restartTimers = _dataTimeQueue.front().first == messageId;
             _deleteMessageFromTimeQueue( messageId );
-            _queueMonitor = _messageRecordHandler.mapSize() < MAX_MESSAGE_BUFF_SIZE;
             if( _dataTimeQueue.size() != 0 ) 
                 _resetTimers();
             else 

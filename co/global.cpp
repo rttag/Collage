@@ -94,7 +94,8 @@ int32_t     _iAttributes[Global::IATTR_ALL] =
     1,      // IATTR_ROBUSTNESS
     _getTimeout(), // IATTR_TIMEOUT_DEFAULT
     1023,   // IATTR_OBJECT_COMPRESSION
-    3       // TREECAST_THRESHOLD
+    3,      // TREECAST_THRESHOLD
+    12288   // 12*1024 TREECAST_SMALLSCATTER_THRESHOLD
 };
 }
 

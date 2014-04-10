@@ -46,7 +46,7 @@ co::TreecastMessageRecordPtr TreecastMessageRecordHandler::createOrUpdateMessage
     
     TreecastMessageRecordMap_T::iterator messageIt = m_treecastMessageRecordMap.find(messageId);
     if (messageIt == m_treecastMessageRecordMap.end() 
-        ||    nodes.size() != (messageIt->second)->state.size() ) 
+        ||    nodes != messageIt->second->nodes ) 
     {
         // The message is new to me
         m_treecastMessageRecordMap[messageId] = record =

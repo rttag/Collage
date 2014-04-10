@@ -151,9 +151,7 @@ private:
 
     void _executeSend( ScatterHeader& header, lunchbox::Bufferb const& data );
 
-    void _filterNodeList( std::vector<NodeID>& nodes );
-
-    void _printNodes( const std::vector<NodeID>& nodes );
+    bool _filterNodeList( std::vector<NodeID>& nodes );
 
     void _deleteMessageFromTimeQueue( UUID const messageId );
 
