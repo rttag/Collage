@@ -537,7 +537,7 @@ void Treecast::propagateScatter(ScatterHeader & header, lunchbox::Bufferb const&
                 Array<const uint8_t> sendData( data.getData() + sourceOffset, sendSize );
                 size_t destinationRank = rank + mask;
                 NodeID destinationId = header.nodes[destinationRank];
-                LBLOG( LOG_TC ) << "sending " << (smallMessage ? "scatter " : "smallscatter ")
+                LBLOG( LOG_TC ) << "sending " << (smallMessage ? "smallscatter " : "scatter ")
                     << header.messageId << " to " << destinationId << std::endl;
                 _send(destinationId, header, sendData);
             }

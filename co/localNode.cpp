@@ -127,7 +127,7 @@ protected:
     virtual bool stopRunning() { return _localNode->isClosed(); }
     virtual bool notifyIdle()
     {
-        return true;
+        return false;
     }
 
 private:
