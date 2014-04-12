@@ -935,9 +935,7 @@ NodePtr LocalNode::_connect( const NodeID& nodeID, NodePtr peer )
     peer->send( CMD_NODE_GET_NODE_DATA ) << nodeID << requestID;
 
     void* result = 0;
-    waitRequest( requestID, result );
-
-    if( !result )
+    if ( !waitRequest( requestID, result, Global::getTimeout() ) || !result )
     {
         LBINFO << "Node " << nodeID << " not found on " << peer->getNodeID()
                << std::endl;

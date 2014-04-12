@@ -78,7 +78,7 @@ Treecast::Treecast( TreecastConfig const& config)
 , _messageRecordHandler()
 , _pingTimer( _io )
 , _resendTimer( _io )
-, _needToStartTimers( true )
+, _needToStartTimers( 1 )
 , _ioThread( new detail::TimerThread( _io ) )
 , _queueMonitor( true )
 
@@ -137,7 +137,6 @@ void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
 
     _dataTimeQueue.push_back( std::make_pair(msgID, _getCurrentTimeMilliseconds() ) );
     _queueMonitor = _dataTimeQueue.size() < MAX_MESSAGE_BUFF_SIZE;
-    _checkTimers();
     
     _executeSend(header, data);
 }
@@ -155,7 +154,7 @@ void Treecast::_checkTimers()
     if( _needToStartTimers )
     {
         _resetTimers();
-        _needToStartTimers = false;
+        _needToStartTimers = 0;
     }
 }
 
@@ -284,9 +283,9 @@ void Treecast::resendBufferedMessage( const boost::system::error_code& e )
         _dataTimeQueue.push_back( std::make_pair( messageId, _getCurrentTimeMilliseconds() ) );
         _dataTimeQueue.pop_front();
 
-        _needToStartTimers = true;
         _executeSend( header, data );
     }
+    _needToStartTimers = 1;
 }
 
 void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
@@ -450,7 +449,7 @@ void Treecast::onAcknowledgeCommand(ICommand& command)
             {
                 _pingTimer.cancel();
                 _resendTimer.cancel();
-                _needToStartTimers = true;
+                _needToStartTimers = 1;
             }
         }
     }

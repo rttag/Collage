@@ -252,7 +252,7 @@ private:
     boost::asio::io_service                                      _io;
     boost::asio::deadline_timer                                  _pingTimer;
     boost::asio::deadline_timer                                  _resendTimer;
-    bool                                                         _needToStartTimers;
+    lunchbox::a_int32_t                                          _needToStartTimers;
     std::deque<lunchbox::UUID>                                   _lastDispatchedMessages;
     std::set<NodeID>                                             _blackListNodes;
     detail::TimerThread*                                         _ioThread;

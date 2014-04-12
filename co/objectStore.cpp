@@ -198,7 +198,9 @@ NodeID ObjectStore::_findMasterNodeID( const UUID& identifier )
         node->send( CMD_NODE_FIND_MASTER_NODE_ID ) << identifier << requestID;
 
         NodeID masterNodeID;
-        _localNode->waitRequest( requestID, masterNodeID );
+        if ( !_localNode->waitRequest( requestID, masterNodeID, 
+                Global::getTimeout( )))
+            continue;
 
         if( masterNodeID != 0 )
         {
