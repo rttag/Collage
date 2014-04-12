@@ -613,20 +613,26 @@ bool SocketConnection::_createSocket()
 void SocketConnection::_tuneSocket( const Socket fd )
 {
     const int on         = 1;
-    const DWORD timeout = Global::getTimeout();
     setsockopt( fd, IPPROTO_TCP, TCP_NODELAY,
                 reinterpret_cast<const char*>( &on ), sizeof( on ));
     setsockopt( fd, SOL_SOCKET, SO_REUSEADDR,
                 reinterpret_cast<const char*>( &on ), sizeof( on ));
-    setsockopt( fd, SOL_SOCKET, SO_RCVTIMEO, 
-                reinterpret_cast<const char*>( &timeout ), sizeof( timeout ));
 
 #ifdef _WIN32
+    const DWORD timeout = Global::getTimeout();
     const int size = 128768;
     setsockopt( fd, SOL_SOCKET, SO_RCVBUF,
                 reinterpret_cast<const char*>( &size ), sizeof( size ));
     setsockopt( fd, SOL_SOCKET, SO_SNDBUF,
                 reinterpret_cast<const char*>( &size ), sizeof( size ));
+    setsockopt( fd, SOL_SOCKET, SO_RCVTIMEO, 
+        reinterpret_cast<const char*>( &timeout ), sizeof( timeout ));
+#else
+    timeval t;
+    t.tv_sec = Global::getTimeout()/1000;
+    t.tv_usec = (Global::getTimeout()%1000)*1000;
+    setsockopt( fd, SOL_SOCKET, SO_RCVTIMEO, 
+        reinterpret_cast<const char*>( &t ), sizeof( t ));
 #endif
 }
 
