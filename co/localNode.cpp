@@ -949,7 +949,7 @@ NodePtr LocalNode::_connect( const NodeID& nodeID, NodePtr peer )
     if( node->isReachable( ))
         return node;
 
-    size_t tries = 10;
+    size_t tries = 5;
     while( --tries )
     {
         switch( _connect( node ))

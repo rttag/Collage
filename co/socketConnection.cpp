@@ -469,7 +469,31 @@ int64_t SocketConnection::readSync( void* buffer, const uint64_t bytes,
 
     while( true )
     {
-        if( WSAGetOverlappedResult( _readFD, &_overlappedRead, &got, block,
+        DWORD ret = 0;
+        if ( block )
+            ret = WaitForSingleObject( _overlappedRead.hEvent, Global::getTimeout() );
+        if ( ret )
+        {
+            switch (ret)
+            {
+                case WAIT_TIMEOUT: 
+                    LBWARN << "Got " << lunchbox::sysError
+                        << ", closing connection" << std::endl;
+                    close();
+                    return READ_TIMEOUT;
+                case WAIT_FAILED:
+                    LBERROR << "Got " << lunchbox::sysError 
+                        << " bytes on " << getDescription() << std::endl;
+                    return READ_ERROR;
+                default:
+                    LBWARN << "Got " << lunchbox::sysError
+                        << ", closing connection" << std::endl;
+                    close();
+                    return READ_ERROR;
+            }
+        }
+        
+        if( WSAGetOverlappedResult( _readFD, &_overlappedRead, &got, FALSE,
                                     &flags ))
             return got;
 
@@ -627,11 +651,15 @@ void SocketConnection::_tuneSocket( const Socket fd )
                 reinterpret_cast<const char*>( &size ), sizeof( size ));
     setsockopt( fd, SOL_SOCKET, SO_RCVTIMEO, 
         reinterpret_cast<const char*>( &timeout ), sizeof( timeout ));
+    setsockopt( fd, SOL_SOCKET, SO_SNDTIMEO, 
+        reinterpret_cast<const char*>( &timeout ), sizeof( timeout ));
 #else
     timeval t;
     t.tv_sec = Global::getTimeout()/1000;
     t.tv_usec = (Global::getTimeout()%1000)*1000;
     setsockopt( fd, SOL_SOCKET, SO_RCVTIMEO, 
+        reinterpret_cast<const char*>( &t ), sizeof( t ));
+    setsockopt( fd, SOL_SOCKET, SO_SNDTIMEO, 
         reinterpret_cast<const char*>( &t ), sizeof( t ));
 #endif
 }

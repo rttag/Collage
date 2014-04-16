@@ -76,20 +76,16 @@ void Treecast::updateConfig(TreecastConfig const& config)
 Treecast::Treecast( TreecastConfig const& config)
 : _config(config) 
 , _messageRecordHandler()
-, _pingTimer( _io )
-, _resendTimer( _io )
-, _needToStartTimers( 1 )
+, _timer( _io )
 , _ioThread( new detail::TimerThread( _io ) )
 , _queueMonitor( true )
-
 {
     _ioThread->start();
 }
 
 Treecast::~Treecast()
 {
-    _pingTimer.cancel();
-    _resendTimer.cancel();
+    _timer.cancel();
     _ioThread->stopIOService();
     _ioThread->join();
 }
@@ -135,43 +131,48 @@ void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
     TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( msgID );
     memcpy( record->buffer.getData(), data.getData(), data.getSize() );
 
-    _dataTimeQueue.push_back( std::make_pair(msgID, _getCurrentTimeMilliseconds() ) );
-    _queueMonitor = _dataTimeQueue.size() < MAX_MESSAGE_BUFF_SIZE;
-    
-    _executeSend(header, data);
+    _executeSend(header, data, false);
 }
 
 boost::posix_time::ptime Treecast::_getCurrentTimeMilliseconds() 
 {
+#ifdef _WIN32
+    return boost::posix_time::microsec_clock::local_time();
+#else
     boost::posix_time::ptime micro_time = boost::posix_time::microsec_clock::local_time();
     boost::posix_time::time_duration duration( micro_time.time_of_day() );
     boost::posix_time::time_duration milli_duration = boost::posix_time::milliseconds( duration.total_milliseconds() );
     return boost::posix_time::ptime( micro_time.date(), milli_duration );
+#endif
 }
 
-void Treecast::_checkTimers()
-{
-    if( _needToStartTimers )
-    {
-        _resetTimers();
-        _needToStartTimers = 0;
-    }
-}
-
-void Treecast::_executeSend( ScatterHeader& header, lunchbox::Bufferb const& data ) 
+void Treecast::_executeSend( ScatterHeader& header, lunchbox::Bufferb const& data, bool needPop ) 
 {
     OCommand cmd( _localNode, _localNode, CMD_NODE_TREECAST_SEND );
     Array<const uint8_t> payload( data.getData(), data.getSize());
-    cmd << header << data.getSize() << payload;
+    cmd << header << data.getSize() << payload << needPop;
 }
 
 void Treecast::onSendCommand(ICommand& command)
 {
     ScatterHeader header;
     lunchbox::Bufferb payload;
-    command >> header >> payload;
+    bool needPop;
+    command >> header >> payload >> needPop;
     _filterNodeList( header.nodes );
     LBLOG( LOG_TC ) << "sending message " << header.messageId << " to " << header.nodes.size() << std::endl;
+    
+
+    bool isEmptyTimeQueue = _dataTimeQueue.empty();
+    _dataTimeQueue.push_back( std::make_pair( header.messageId, _getCurrentTimeMilliseconds() ) );
+    if( needPop )
+        _deleteMessageFromTimeQueue( header.messageId );
+    else
+        _queueMonitor = _dataTimeQueue.size() < MAX_MESSAGE_BUFF_SIZE;
+    //reset timer if we pushed new message in the queue
+    if( isEmptyTimeQueue && !_dataTimeQueue.empty() ) 
+        _resetTimers();
+
     bool smallMessage = (header.byteCount <= _config.smallMessageThreshold);
     if (smallMessage)
     {
@@ -181,7 +182,6 @@ void Treecast::onSendCommand(ICommand& command)
     {
         processScatterCommand(header, payload);
     }
-    _checkTimers();
 }
 
 //list of nodes we want to filter should be sorted
@@ -205,9 +205,10 @@ bool Treecast::_filterNodeList( std::vector<NodeID>& nodes )
             it++;
         } 
     }
-    bool sizeChanged =  nodes.size() != newNodes.size();
+    if( nodes.size() == newNodes.size() )
+        return false;
     nodes = newNodes;
-    return sizeChanged;
+    return true;
 }
 
 void Treecast::_updateBlackNodeList( std::vector<NodeID>& nodes ) 
@@ -248,6 +249,7 @@ void Treecast::pingNodes( const boost::system::error_code& e )
         if( node )
             _localNode->ping( node );
     }
+    _resetTimers();
 }
 
 void Treecast::resendBufferedMessage( const boost::system::error_code& e ) 
@@ -258,10 +260,9 @@ void Treecast::resendBufferedMessage( const boost::system::error_code& e )
     if( _dataTimeQueue.empty() )
         return;
     
-    size_t q_size = _dataTimeQueue.size();
-    for( size_t i = 0; i < q_size; ++i ) 
+    for( DataTimeQueueIt it = _dataTimeQueue.begin(); it != _dataTimeQueue.end(); ++it ) 
     {
-        UUID messageId = _dataTimeQueue.front().first;
+        UUID messageId = it->first;
         TreecastMessageRecordPtr record = _messageRecordHandler.getRecordByID( messageId );
         std::vector<NodeID>& nodes = record->nodes;
         _updateBlackNodeList( nodes );
@@ -271,7 +272,7 @@ void Treecast::resendBufferedMessage( const boost::system::error_code& e )
         LBLOG( LOG_TC ) << "Resend message: "<< messageId <<std::endl;
         //if we don't have any nodes to send to, return
         if( nodes.empty() )
-            return;
+            continue;
 
         lunchbox::Bufferb& data = record->buffer;
         size_t byteCount = data.getSize();
@@ -279,13 +280,10 @@ void Treecast::resendBufferedMessage( const boost::system::error_code& e )
         header.byteCount = byteCount;
         header.messageId = messageId;
         header.nodes = nodes;
-        //push message again into time queue, as we don't know if it will succeed 
-        _dataTimeQueue.push_back( std::make_pair( messageId, _getCurrentTimeMilliseconds() ) );
-        _dataTimeQueue.pop_front();
 
-        _executeSend( header, data );
+        _executeSend( header, data, true );
     }
-    _needToStartTimers = 1;
+    _resetTimers();
 }
 
 void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
@@ -319,7 +317,6 @@ void Treecast::checkForFinished(UUID const& messageId, bool needDispatch)
         {
             BufferPtr buffer = _localNode->allocBuffer( record->buffer.getSize() );
             buffer->replace( record->buffer.getData(), record->buffer.getSize() );
-            //check if buffer is ok
             ObjectDataICommand cmd( _localNode, _localNode->getNode( record->nodes[0] ), buffer, false );
             _localNode->dispatchCommand( cmd );
             LBLOG( LOG_TC ) << "Dispatched message: "<< messageId << std::endl;
@@ -350,17 +347,29 @@ void Treecast::_resetTimers()
 {
     //no messages
     lunchbox::ScopedWrite lock( _mutex );
+    
     if( _dataTimeQueue.empty() )
         return;
-    //boost::posix_time::ptime start = ( _dataTimeQueue.front() ).second ;
-    //boost::posix_time::time_duration duration = boost::posix_time::milliseconds( co::Global::getTimeout() );
-    //boost::posix_time::ptime resendDeadline = start + duration;
-    _pingTimer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds( co::Global::getKeepaliveTimeout() ) ) );
-    _resendTimer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds( co::Global::getTimeout() ) ) );
-    //_resendTimer.expires_at( resendDeadline );
 
-    _pingTimer.async_wait(  BOOST_BIND( &Treecast::pingNodes, this, boost::asio::placeholders::error ) );
-    _resendTimer.async_wait( BOOST_BIND( &Treecast::resendBufferedMessage, this, boost::asio::placeholders::error ) );
+    boost::posix_time::ptime startTime = ( _dataTimeQueue.front() ).second ;
+    boost::posix_time::ptime curTime = boost::posix_time::microsec_clock::local_time();
+
+    boost::posix_time::time_duration duration = curTime - startTime;
+    int64_t durationVal = duration.total_milliseconds();
+    int64_t keepAliveTimeout = static_cast<int64_t>( co::Global::getKeepaliveTimeout() );
+    int64_t timeout = static_cast<int64_t>( co::Global::getTimeout() );
+    int64_t keepAliveVal = keepAliveTimeout - durationVal%keepAliveTimeout;
+    int64_t timeoutVal = timeout - durationVal%timeout;
+    if( timeoutVal <= keepAliveVal ) 
+    {
+        _timer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds(timeoutVal) ) );
+        _timer.async_wait(  BOOST_BIND( &Treecast::resendBufferedMessage, this, boost::asio::placeholders::error ) );
+    }
+    else 
+    {
+        _timer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds(keepAliveVal) ) );
+        _timer.async_wait(  BOOST_BIND( &Treecast::pingNodes, this, boost::asio::placeholders::error ) );
+    }
 }
 
 void Treecast::onScatterCommand(ICommand& command)
@@ -441,16 +450,11 @@ void Treecast::onAcknowledgeCommand(ICommand& command)
             LBLOG( LOG_TC ) << "Treecast Master got ACK message: " << messageId << std::endl;
             _messageRecordHandler.deleteRecord( messageId );
             
-            //bool restartTimers = _dataTimeQueue.front().first == messageId;
             _deleteMessageFromTimeQueue( messageId );
-            if( _dataTimeQueue.size() != 0 ) 
+            if( !_dataTimeQueue.empty() ) 
                 _resetTimers();
             else 
-            {
-                _pingTimer.cancel();
-                _resendTimer.cancel();
-                _needToStartTimers = 1;
-            }
+                _timer.cancel();
         }
     }
 }
@@ -459,8 +463,13 @@ void Treecast::_send( NodeID destinationId, ScatterHeader const& header, Array<c
 {
     NodePtr destNode = _localNode->getNode( destinationId );
     if ( !destNode )
-        destNode = _localNode->connect( destinationId );
-    if( !destNode ) {
+    {
+        if ( _blackListNodes.find(destinationId) == _blackListNodes.end() )
+            destNode = _localNode->connect( destinationId );
+    }
+    if( !destNode ) 
+    {
+        _blackListNodes.insert( destinationId );
         LBERROR << "Can't connect to node: " <<destinationId << std::endl;
         return;
     }

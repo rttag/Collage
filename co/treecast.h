@@ -149,7 +149,7 @@ private:
     //! \throw nil doesn't throw
     void _send(NodeID destinationId, ScatterHeader const& header, Array<const uint8_t> const& data);
 
-    void _executeSend( ScatterHeader& header, lunchbox::Bufferb const& data );
+    void _executeSend( ScatterHeader& header, lunchbox::Bufferb const& data, bool needPop );
 
     bool _filterNodeList( std::vector<NodeID>& nodes );
 
@@ -157,8 +157,6 @@ private:
 
     void _resetTimers();
     
-    void _checkTimers();
-
     void _updateBlackNodeList( std::vector<NodeID>& nodes );
 
     boost::posix_time::ptime _getCurrentTimeMilliseconds();
@@ -250,9 +248,7 @@ private:
     LocalNode*                                                   _localNode;
     DataTimeQueue                                                _dataTimeQueue;
     boost::asio::io_service                                      _io;
-    boost::asio::deadline_timer                                  _pingTimer;
-    boost::asio::deadline_timer                                  _resendTimer;
-    lunchbox::a_int32_t                                          _needToStartTimers;
+    boost::asio::deadline_timer                                  _timer;
     std::deque<lunchbox::UUID>                                   _lastDispatchedMessages;
     std::set<NodeID>                                             _blackListNodes;
     detail::TimerThread*                                         _ioThread;
