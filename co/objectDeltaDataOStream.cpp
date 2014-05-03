@@ -39,7 +39,7 @@ void ObjectDeltaDataOStream::sendData( const void* buffer, const uint64_t size,
                                        const bool last )
 {
     ObjectDataOStream::send( CMD_OBJECT_DELTA, COMMANDTYPE_OBJECT,
-                             EQ_INSTANCE_ALL, size, last );
+                             EQ_INSTANCE_NONE, size, last );
 }
 
 void ObjectDeltaDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
@@ -49,7 +49,7 @@ void ObjectDeltaDataOStream::_buildTreecastBuffer( lunchbox::Bufferb& buf,
     _sequence = 0;
 
     ObjectDataOCommand odc( Connections(), CMD_OBJECT_DELTA, 
-        COMMANDTYPE_OBJECT, _cm->getObject()->getID(), EQ_INSTANCE_ALL, 
+        COMMANDTYPE_OBJECT, _cm->getObject()->getID(), EQ_INSTANCE_NONE, 
         _version, 0, getBuffer().getNumBytes(), true, this );
     buf.append(odc.getBuffer().getData(), odc.getBuffer().getNumBytes());
 

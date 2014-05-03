@@ -35,7 +35,7 @@ namespace co
 {
 ObjectInstanceDataOStream::ObjectInstanceDataOStream( const ObjectCM* cm )
         : ObjectDataOStream( cm )
-        , _instanceID( EQ_INSTANCE_ALL )
+        , _instanceID( EQ_INSTANCE_NONE )
         , _command( 0 )
 {}
 
