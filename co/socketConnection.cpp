@@ -469,9 +469,12 @@ int64_t SocketConnection::readSync( void* buffer, const uint64_t bytes,
 
     while( true )
     {
+#if 0 // I have to disable this, since Collage is not scaling very well 
+      // at the moment and reads can take very long
         DWORD ret = 0;
         if ( block )
-            ret = WaitForSingleObject( _overlappedRead.hEvent, Global::getTimeout() );
+            ret = WaitForSingleObject( _overlappedRead.hEvent, 
+                                            Global::getTimeout() );
         if ( ret )
         {
             switch (ret)
@@ -495,6 +498,10 @@ int64_t SocketConnection::readSync( void* buffer, const uint64_t bytes,
         
         if( WSAGetOverlappedResult( _readFD, &_overlappedRead, &got, FALSE,
                                     &flags ))
+#else
+        if( WSAGetOverlappedResult( _readFD, &_overlappedRead, &got, block,
+                                    &flags ))
+#endif
             return got;
 
         const int err = WSAGetLastError();
