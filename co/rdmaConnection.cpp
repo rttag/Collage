@@ -811,7 +811,13 @@ void RDMAConnection::_cleanup( )
 
     _rptr = 0UL;
     _rbase = _rkey = 0ULL;
-#ifndef _WIN32
+#ifdef _WIN32
+    if ( _notifier )
+    {
+        CloseHandle( _notifier );
+        _notifier = 0;
+    }
+#else
     if(( _notifier >= 0 ) && TEMP_FAILURE_RETRY( ::close( _notifier )))
         LBWARN << "close : " << lunchbox::sysError << std::endl;
     _notifier = -1;
