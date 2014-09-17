@@ -12,11 +12,6 @@ TreecastMessageRecordHandler::TreecastMessageRecordHandler()
 
 }
 
-size_t TreecastMessageRecordHandler::mapSize()
-{
-    return m_treecastMessageRecordMap.size();
-}
-
 void TreecastMessageRecordHandler::deleteRecord( UUID const& messageId )
 {
     lunchbox::ScopedFastWrite lock( m_SpinLock );
@@ -24,7 +19,7 @@ void TreecastMessageRecordHandler::deleteRecord( UUID const& messageId )
     if( it != m_treecastMessageRecordMap.end() )
         m_treecastMessageRecordMap.erase(it);
     else
-        LBLOG( LOG_TC ) << "HORROR: Wasn't able to find messageId: "<< messageId <<" in my map";
+        LBLOG( LOG_TC ) << "ERROR: Wasn't able to find messageId: "<< messageId <<" in my map";
 }
 
 co::TreecastMessageRecordPtr TreecastMessageRecordHandler::getRecordByID( UUID const& messageId )
@@ -70,35 +65,32 @@ TreecastMessageRecordPtr TreecastMessageRecordHandler::checkAndCleanUpMessageRec
      bool doCheck)
 {
     LBLOG( LOG_TC ) << "START cleaning up message record: messageId: " << messageId << ", doCheck: " << doCheck << std::endl;
-    TreecastMessageRecordPtr record;
+    lunchbox::ScopedFastWrite lock( m_SpinLock );
+    TreecastMessageRecordMap_T::iterator mapIt =
+        m_treecastMessageRecordMap.find(messageId);
+    if (m_treecastMessageRecordMap.end() == mapIt)
     {
-        lunchbox::ScopedFastWrite lock( m_SpinLock );
-        TreecastMessageRecordMap_T::iterator mapIt =
-            m_treecastMessageRecordMap.find(messageId);
-        if (m_treecastMessageRecordMap.end() == mapIt)
+        LBLOG( LOG_TC ) << "I just got a cleanup request on an unknown multicast message." << std::endl;
+        return TreecastMessageRecordPtr();
+    }
+    // Let's check the resendNr
+    TreecastMessageRecordPtr record = mapIt->second;
+    if (doCheck)
+    {
+        // Let's see if we have all pieces
+        size_t pieceCount = record->state.size();
+        size_t pos;
+        for (pos = 0; pos < pieceCount; ++pos)
         {
-            LBLOG( LOG_TC ) << "I just got a cleanup request on an unknown multicast message." << std::endl;
-            return TreecastMessageRecordPtr();
-        }
-        // Let's check the resendNr
-        record = mapIt->second;
-        if (doCheck)
-        {
-            // Let's see if we have all pieces
-            size_t pieceCount = record->state.size();
-            size_t pos;
-            for (pos = 0; pos < pieceCount; ++pos)
+            if (record->state[pos] != TREECAST_PIECE_STATE_FULL)
             {
-                if (record->state[pos] != TREECAST_PIECE_STATE_FULL)
-                {
-                    // This piece is still missing, we are not finished yet
-                    return TreecastMessageRecordPtr();
-                }
+                // This piece is still missing, we are not finished yet
+                return TreecastMessageRecordPtr();
             }
         }
-        LBLOG( LOG_TC ) << "FINISHED cleaning up message record: messageId: " << messageId << ", doCheck: " << doCheck << std::endl;
-        //LBERROR << "Node[ " << rank <<"] got message :" << messageId <<std::endl;
     }
+    LBLOG( LOG_TC ) << "FINISHED cleaning up message record: messageId: " << messageId << ", doCheck: " << doCheck << std::endl;
+
     return record;
 }
 

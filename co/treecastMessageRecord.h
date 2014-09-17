@@ -23,6 +23,7 @@ struct TreecastMessageRecord : public lunchbox::Referenced
     TreecastMessageRecord(size_t byteCount, size_t pieceCount, std::vector<NodeID> const& nodes);
     ~TreecastMessageRecord();
     bool isFullyAcknowledged( std::vector<NodeID> const& childNodes );
+    lunchbox::SpinLock                 m_nodesSpinLock;
     lunchbox::Bufferb                  buffer;     //<! The buffer that stores the received pieces
     std::vector<lunchbox::a_int32_t>   state;      //<! Marks which parts of the message arrived already
     std::vector<NodeID>                nodes;      //<! The nodes participating in the communication
