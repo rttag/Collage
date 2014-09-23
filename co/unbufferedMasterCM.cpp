@@ -58,9 +58,17 @@ uint128_t UnbufferedMasterCM::commit( const uint32_t incarnation )
 
     ObjectDeltaDataOStream os( this );
     os.enableCommit( _version + 1, *_slaves );
+    uint32_t old = Global::getObjectBufferSize();
+    bool treecast = useTreecast( *_slaves );
+    if ( treecast )
+        Global::setObjectBufferSize( ~0u );
+
     _object->pack( os );
-    if ( useTreecast( *_slaves ))
+    if ( treecast )
+    {
         os.treecastDisable( *_slaves, _object->getLocalNode());
+        Global::setObjectBufferSize( old );
+    }
     else
         os.disable();
 

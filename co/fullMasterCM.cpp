@@ -80,11 +80,20 @@ void FullMasterCM::init()
     InstanceData* data = _newInstanceData();
 
     uint32_t old = Global::getObjectBufferSize();
-    Global::setObjectBufferSize( ~0u );
+    
+    bool treecast = useTreecast( *_slaves );
+    if ( treecast )
+        Global::setObjectBufferSize( ~0u );
+
     data->os.enableCommit( VERSION_FIRST, *_slaves );
     _object->getInstanceData( data->os );
-    data->os.disable();
-    Global::setObjectBufferSize( old );
+    if ( treecast )
+    {
+        data->os.treecastDisable();
+        Global::setObjectBufferSize( old );
+    }
+    else
+        data->os.disable();
 
     _instanceDatas.push_back( data );
     ++_version;
@@ -358,9 +367,17 @@ void FullMasterCM::_commit()
 {
     InstanceData* instanceData = _newInstanceData();
     instanceData->os.enableCommit( _version + 1, *_slaves );
+    uint32_t old = Global::getObjectBufferSize();
+    bool treecast = useTreecast( *_slaves );
+    if ( treecast )
+        Global::setObjectBufferSize( ~0u );
+
     _object->getInstanceData( instanceData->os );
-    if ( useTreecast( *_slaves ))
+    if ( treecast )
+    {
         instanceData->os.treecastDisable( *_slaves, _object->getLocalNode());
+        Global::setObjectBufferSize( old );
+    }
     else
         instanceData->os.disable();
 
