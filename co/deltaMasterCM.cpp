@@ -66,7 +66,6 @@ void DeltaMasterCM::_commit()
         // save instance data
         InstanceData* instanceData = _newInstanceData();
 
-        uint32_t old = Global::getObjectBufferSize();
         instanceData->os.enableCommit( _version + 1, Nodes( ));
         if ( treecast )
             Global::setObjectBufferSize( ~0u );

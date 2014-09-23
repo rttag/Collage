@@ -89,7 +89,7 @@ void FullMasterCM::init()
     _object->getInstanceData( data->os );
     if ( treecast )
     {
-        data->os.treecastDisable();
+        data->os.treecastDisable( *_slaves, _object->getLocalNode() );
         Global::setObjectBufferSize( old );
     }
     else
