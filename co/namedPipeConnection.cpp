@@ -350,7 +350,8 @@ int64_t NamedPipeConnection::readSync( void* buffer, const uint64_t bytes,
         if( GetLastError() == ERROR_PIPE_CONNECTED )
             return 0;
 
-        LBWARN << "Read complete failed: " << lunchbox::sysError
+        if (GetLastError() != ERROR_BROKEN_PIPE ) // peer disconnected
+            LBWARN << "Read complete failed: " << lunchbox::sysError
                << ", closing connection" << std::endl;
         close();
         return -1;
