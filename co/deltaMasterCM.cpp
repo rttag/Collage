@@ -25,7 +25,6 @@
 #include "object.h"
 #include "objectDataIStream.h"
 #include "global.h"
-#include "connections.h"
 
 namespace co
 {
@@ -43,41 +42,21 @@ DeltaMasterCM::~DeltaMasterCM()
 
 void DeltaMasterCM::_commit()
 {
-    uint32_t old = Global::getObjectBufferSize();
-    bool treecast = useTreecast( *_slaves );
     if( !_slaves->empty( ))
     {
         _deltaData.reset();
         _deltaData.enableCommit( _version + 1, *_slaves );
-        if ( treecast )
-            Global::setObjectBufferSize( ~0u );
         _object->pack( _deltaData );
-        if ( treecast )
-        {
-            _deltaData.treecastDisable( *_slaves, _object->getLocalNode());
-            Global::setObjectBufferSize( old );
-        }
-        else
-            _deltaData.disable();
+        _deltaData.disable();
     }
 
     if( _slaves->empty() || _deltaData.hasSentData( ))
     {
         // save instance data
         InstanceData* instanceData = _newInstanceData();
-
         instanceData->os.enableCommit( _version + 1, Nodes( ));
-        if ( treecast )
-            Global::setObjectBufferSize( ~0u );
-
         _object->getInstanceData( instanceData->os );
-        if ( treecast )
-        {
-            instanceData->os.treecastDisable( *_slaves, _object->getLocalNode());
-            Global::setObjectBufferSize( old );
-        }
-        else
-            instanceData->os.disable();
+        instanceData->os.disable();
 
         if( _deltaData.hasSentData() || instanceData->os.hasSentData( ))
         {

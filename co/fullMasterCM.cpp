@@ -78,22 +78,9 @@ void FullMasterCM::init()
     VersionedMasterCM::init();
 
     InstanceData* data = _newInstanceData();
-
-    uint32_t old = Global::getObjectBufferSize();
-    
-    bool treecast = useTreecast( *_slaves );
-    if ( treecast )
-        Global::setObjectBufferSize( ~0u );
-
     data->os.enableCommit( VERSION_FIRST, *_slaves );
     _object->getInstanceData( data->os );
-    if ( treecast )
-    {
-        data->os.treecastDisable( *_slaves, _object->getLocalNode() );
-        Global::setObjectBufferSize( old );
-    }
-    else
-        data->os.disable();
+    data->os.disable();
 
     _instanceDatas.push_back( data );
     ++_version;

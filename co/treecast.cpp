@@ -104,16 +104,15 @@ void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
     for( ; i != nodes.end(); ++i )
     {
         NodePtr node = *i;
-        myNodes.push_back( node->getNodeID( ));
+        if ( node->getNodeID() != _localNode->getNodeID() )
+            myNodes.push_back( node->getNodeID( ));
     }
 
     // Sort the rest of the myNodes vector for quicker lookup later
     std::sort(myNodes.begin()+1, myNodes.end());
     std::unique(myNodes.begin()+1, myNodes.end());
     _filterNodeList( myNodes );
-    // Let's check that the user complied to the protocol and didn't include the local node in the myNodes vector
-    std::vector<NodeID>::const_iterator it = std::lower_bound(myNodes.begin()+1, myNodes.end(), myNodes[0]);
-    LBASSERT(it == myNodes.end() || *it != myNodes[0]);
+
     // Store metadata about this message
     lunchbox::UUID msgID(true);
 
