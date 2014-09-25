@@ -147,7 +147,7 @@ void Object::notifyDetach()
     if( slaves.empty( ))
         return;
 
-    LBWARN << slaves.size() << " slaves subscribed during deregisterObject of "
+    LBVERB << slaves.size() << " slaves subscribed during deregisterObject of "
            << lunchbox::className( this ) << " id " << impl_->id << std::endl;
 
     for( NodesCIter i = slaves.begin(); i != slaves.end(); ++i )

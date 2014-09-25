@@ -941,9 +941,20 @@ void RSPConnection::_handleAcceptIDData( const size_t bytes )
             _removeConnection( node.connectionID );
             break;
 
-        default:
-            LBERROR << "error: received datagram type " << node.type 
+        case DATA:
+        case ACKREQ:
+        case NACK:
+        case ACK:
+        case ID_CONFIRM:
+        case COUNTNODE:
+            LBLOG( LOG_RSP ) << "error: received datagram type " << node.type 
                 << " from " << node.connectionID 
+                << " while in handleAcceptIDData" << std::endl;
+            break;
+
+        default:
+            LBERROR << "error: received unknown datagram type from "
+                << node.connectionID 
                 << " while in handleAcceptIDData" << std::endl;
             break;
     }
@@ -984,9 +995,18 @@ void RSPConnection::_handleInitData( const size_t bytes, const bool connected )
             _removeConnection( node.connectionID );
             return;
 
+        case DATA:
+        case ACKREQ:
+        case NACK:
+        case ACK:
+        case ID_DENY:
+            LBLOG( LOG_RSP ) << "error: received datagram type " << node.type 
+                << " from " << node.connectionID 
+                << " while in handleInitData" << std::endl;
+
         default:
-            LBERROR << "error: received datagram type " << node.type 
-                    << " from " << node.connectionID 
+            LBERROR << "error: received unknown datagram type from" 
+                    << node.connectionID 
                     << " while in handleInitData" << std::endl;
             break;
     }
@@ -1030,8 +1050,8 @@ void RSPConnection::_handleConnectedData( const size_t bytes )
             break;
 
         default:
-            LBASSERTINFO( false,
-                          "Don't know how to handle packet of type " << type );
+            LBERROR << "error: received unknown datagram type"
+                << " while in handleConnectedData" << std::endl;
     }
 
 }
