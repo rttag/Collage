@@ -6,6 +6,9 @@
 
 #include <lunchbox/types.h>
 #include <lunchbox/lock.h>
+
+#include <list>
+
 #include <boost/asio.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/system/error_code.hpp>
