@@ -45,8 +45,8 @@ class CommandThread; class TreecastThread;
      * dispatch. Typically each process uses one local node to communicate with
      * other processes.
      */
-    class LocalNode : public lunchbox::RequestHandler, public Node,
-                      public ObjectHandler
+    class CO_API_CL LocalNode : public lunchbox::RequestHandler, public Node,
+                                public ObjectHandler
     {
     public:
         /** Construct a new local node of the given type. @version 1.0 */

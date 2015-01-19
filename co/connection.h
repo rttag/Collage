@@ -57,7 +57,8 @@ namespace detail { class Connection; }
      *
      * The Connection is used reference-counted throughout the Collage API.
      */
-    class Connection : public lunchbox::Referenced, public lunchbox::NonCopyable
+    class CO_API_CL Connection : public lunchbox::Referenced, 
+                                 public lunchbox::NonCopyable
     {
     public:
         enum State //! The current state of the Connection @version 1.0

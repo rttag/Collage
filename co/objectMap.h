@@ -36,7 +36,7 @@ namespace detail { class ObjectMap; }
  * This creation is handled by an ObjectFactory which has to be provided and
  * implemented for the desired object types.
  */
-class ObjectMap : public Serializable
+class CO_API_CL ObjectMap : public Serializable
 {
 public:
     /**

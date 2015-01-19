@@ -43,7 +43,7 @@ namespace DataStreamTest { class Sender; }
      * Implements buffering, retaining and compressing data in a binary format.
      * Derived classes send the data using the appropriate commands.
      */
-    class DataOStream : public lunchbox::NonCopyable
+    class CO_API_CL DataOStream : public lunchbox::NonCopyable
     {
     public:
         /** @name Internal */

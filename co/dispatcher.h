@@ -35,7 +35,7 @@ namespace detail { class Dispatcher; }
      * Command dispatch in performed through a command queue and command handler
      * table.
      */
-    class Dispatcher
+    class CO_API_CL Dispatcher
     {
     public:
         /** The signature of the base Dispatcher callback. @version 1.0 */

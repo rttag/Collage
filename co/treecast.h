@@ -7,11 +7,11 @@
 #include <lunchbox/types.h>
 #include <lunchbox/lock.h>
 
-#include <list>
-
-#include <boost/asio.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/system/error_code.hpp>
+
+#include <list>
+
 #define MAX_MESSAGE_BUFF_SIZE 64
 
 namespace co {
@@ -25,29 +25,7 @@ class ScatterHeader;
 class AllgatherHeader;
 typedef std::list< std::pair<UUID, boost::posix_time::ptime > > DataTimeQueue;
 typedef DataTimeQueue::iterator DataTimeQueueIt;
-//typedef stde::hash_map<UUID, int64_t > DataTimerMap;
-//typedef DataTimerMap::iterator DataTimerMapIt;
-//typedef std::vector< std::pair<UUID, co::Array<const uint8_t> > > DataBuffVec;
 template<typename T> class Array;
-
-//! Struct representing the configuration of Treecast
-//!
-//! Note: the master and message timeout is meant on a per-megabyte basis.
-struct TreecastConfig
-{
-public:
-    // Constructor
-    TreecastConfig();
-
-public:
-    size_t   smallMessageThreshold; //!< The size of the largest message considered small
-    size_t   blacklistSize;         //!< The size of the blacklist ring buffer
-    uint32_t baseTimeout; //!< The part of timeout independent of MBs
-    uint32_t masterTimeoutPerMB;    //!< The timeout/MB on the sender node
-    uint32_t messageTimeoutPerMB;   //!< The timeout/MB on the receiver nodes
-    uint32_t sendRetryTimeout; //!< Sleep this much before retrying a send
-    uint32_t sendRetryCount; //!< Don't retry a send more times than this
-};
 
 //! Class taking care of multicast communication.
 class Treecast
@@ -63,23 +41,10 @@ public:
     void send(lunchbox::Bufferb& data, Nodes const& nodes);
     //@}
 
-    //! Used for updating the configuration at runtime
-    //!
-    //! The operation is not thread-safe, use only for testing and debugging, and only when no multicast
-    //! communication is in progress.
-    //!
-    //! \param config The new configuration
-    //!
-    //! \throw nil doesn't throw
-    void updateConfig(TreecastConfig const& config);
-
     //! Constructor
-    //! \param clusterManager The ClusterManager has to be provided here
-    //! \param threadPool A WorkerPool has to be provided here, might be the same as for the ClusterManager
-    //! \param config A MulticastConfig has to be provided with the parameters of the Multicast
     //!
     //! \throw nil doesn't throw
-    Treecast(TreecastConfig const& config);
+    Treecast();
 
     //! Dtor
     ~Treecast();
@@ -245,18 +210,13 @@ private:
     void processAllgatherCommand(AllgatherHeader const& header, lunchbox::Bufferb const& data);
 
 private:
-    TreecastConfig                                               _config;
-    lunchbox::Lock                                               _configUpdateMutex;
     TreecastMessageRecordHandler                                 _messageRecordHandler;
     LocalNode*                                                   _localNode;
     DataTimeQueue                                                _dataTimeQueue;
-    boost::asio::io_service                                      _io;
-    boost::asio::deadline_timer                                  _timer;
     std::deque<lunchbox::UUID>                                   _lastDispatchedMessages;
     std::set<NodeID>                                             _blackListNodes;
     detail::TimerThread*                                         _ioThread;
     lunchbox::Lock                                               _mutex;
-    lunchbox::SpinLock                                           _spinLock;
     lunchbox::Monitor<bool>                                      _queueMonitor;
 };
 }

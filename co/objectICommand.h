@@ -37,7 +37,7 @@ enum ObjectCommands
 namespace detail { class ObjectICommand; }
 
 /** An input command specialization for objects. */
-class ObjectICommand : public ICommand
+class CO_API_CL ObjectICommand : public ICommand
 {
 public:
     /** @internal */

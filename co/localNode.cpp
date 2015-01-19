@@ -147,8 +147,9 @@ public:
             , commandThread( 0 )
             , treecastThread( 0 )
             , service( "_collage._tcp" )
-            , treeCaster(TreecastConfig())
+            , treeCaster()
         {
+            treeCaster.init();
         }
 
     ~LocalNode()
@@ -157,6 +158,8 @@ public:
             LBASSERT( connectionNodes.empty( ));
             LBASSERT( pendingCommands.empty( ));
             LBASSERT( nodes->empty( ));
+
+            treeCaster.shutdown();
 
             delete objectStore;
             objectStore = 0;

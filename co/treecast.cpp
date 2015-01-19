@@ -5,89 +5,78 @@
 #include "objectDataICommand.h"
 #include "log.h"
 #include "global.h"
+
+#include <co/connectionDescription.h>
+
 #include <lunchbox/scopedMutex.h>
 #include <lunchbox/uuid.h>
-#include <boost/bind/bind.hpp>
 #include <lunchbox/thread.h>
-#include <boost/asio/time_traits.hpp>
-#include <co/connectionDescription.h>
+
+#include <boost/bind/bind.hpp>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/placeholders.hpp>
 
 #include <algorithm>
 
-typedef boost::asio::time_traits<boost::posix_time::ptime> time_traits_t; 
-
 namespace co {
 
-
-    namespace detail
+namespace detail
+{
+class TimerThread : public lunchbox::Thread
+{
+public:
+    TimerThread() 
+        : _io()
+        , _timer( _io )
+        , _work( _io ) {}
+    virtual bool init()
     {
-        class TimerThread : public lunchbox::Thread
-        {
-        public:
-            TimerThread( boost::asio::io_service& io ) : _io(io), _work( new boost::asio::io_service::work( _io ) ) {}
-            virtual bool init()
-            {
-                setName( std::string("TimerTreeCastThread") );
-                return true;
-            }
-            virtual void run() 
-            {
-                _io.run(); 
-            }
-            void stopIOService()
-            {
-                delete _work;
-                _work = 0;
-            }
-
-        private:
-            boost::asio::io_service& _io;
-            boost::asio::io_service::work* _work;
-        };
+        setName( std::string("TimerTreeCastThread") );
+        return true;
+    }
+    virtual void run() 
+    {
+        _io.run(); 
+    }
+    void stopIOService()
+    {
+        _timer.cancel();
     }
 
-TreecastConfig::TreecastConfig()
-: smallMessageThreshold( Global::getIAttribute( Global::IATTR_TREECAST_THRESHOLD ) )
-, blacklistSize(10)
-, baseTimeout(10000)
-, masterTimeoutPerMB(300)
-, messageTimeoutPerMB(330)
-, sendRetryTimeout(100)
-, sendRetryCount(50)
-{
+    boost::asio::deadline_timer& timer()
+    {
+        return _timer;
+    }
+
+private:
+    boost::asio::io_service        _io;
+    boost::asio::deadline_timer    _timer;
+    boost::asio::io_service::work  _work;
+};
 }
 
 void Treecast::init()
 {
+    _ioThread = new detail::TimerThread();
+    _ioThread->start();
 }
 
 void Treecast::shutdown()
 {
+    _ioThread->stopIOService();
+    _ioThread->join();
 }
 
-void Treecast::updateConfig(TreecastConfig const& config)
-{
-    // I guard the updates with a mutex (but not the accesses) to make sure that after the update
-    // we get a consistent state
-    lunchbox::ScopedWrite mutex(_configUpdateMutex);
-    _config = config;
-}
-
-Treecast::Treecast( TreecastConfig const& config)
-: _config(config) 
-, _messageRecordHandler()
-, _timer( _io )
-, _ioThread( new detail::TimerThread( _io ) )
+Treecast::Treecast()
+: _messageRecordHandler()
+, _ioThread( 0 )
 , _queueMonitor( true )
 {
-    _ioThread->start();
 }
 
 Treecast::~Treecast()
 {
-    _timer.cancel();
-    _ioThread->stopIOService();
-    _ioThread->join();
 }
 
 void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
@@ -172,7 +161,9 @@ void Treecast::onSendCommand(ICommand& command)
             _resetTimers();
     }
 
-    bool smallMessage = (header.byteCount <= _config.smallMessageThreshold);
+    const uint64_t threshold = 
+        Global::getIAttribute( Global::IATTR_TREECAST_SMALLSCATTER_THRESHOLD );
+    bool smallMessage = (header.byteCount <= threshold );
     if (smallMessage)
     {
         processSmallScatterCommand(header, payload);
@@ -368,13 +359,13 @@ void Treecast::_resetTimers()
     int64_t timeoutVal = timeout - durationVal%timeout;
     if( timeoutVal <= keepAliveVal ) 
     {
-        _timer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds(timeoutVal) ) );
-        _timer.async_wait(  BOOST_BIND( &Treecast::resendBufferedMessage, this, boost::asio::placeholders::error ) );
+        _ioThread->timer().expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds(timeoutVal) ) );
+        _ioThread->timer().async_wait(  BOOST_BIND( &Treecast::resendBufferedMessage, this, boost::asio::placeholders::error ) );
     }
     else 
     {
-        _timer.expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds(keepAliveVal) ) );
-        _timer.async_wait(  BOOST_BIND( &Treecast::pingNodes, this, boost::asio::placeholders::error ) );
+        _ioThread->timer().expires_from_now( boost::posix_time::time_duration( boost::posix_time::milliseconds(keepAliveVal) ) );
+        _ioThread->timer().async_wait(  BOOST_BIND( &Treecast::pingNodes, this, boost::asio::placeholders::error ) );
     }
 }
 
@@ -459,7 +450,7 @@ void Treecast::onAcknowledgeCommand(ICommand& command)
             if( !_dataTimeQueue.empty() ) 
                 _resetTimers();
             else 
-                _timer.cancel();
+                _ioThread->timer().cancel();
         }
     }
 }

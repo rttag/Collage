@@ -35,7 +35,7 @@ namespace detail { class Serializable; }
  * Serializable -> eq::fabric::Object -> eq::fabric::Frustum illustrates the
  * usage of this class.
  */
-class Serializable : public Object
+class CO_API_CL Serializable : public Object
 {
 public:
     /** @return the current dirty bit mask. @version 1.0 */

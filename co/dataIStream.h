@@ -37,7 +37,7 @@ namespace co
 namespace detail { class DataIStream; }
 
 /** A std::istream-like input data stream for binary data. */
-class DataIStream
+class CO_API_CL DataIStream
 {
 public:
     /** @name Internal */

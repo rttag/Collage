@@ -23,12 +23,29 @@
 
 #include <co/defines.h>
 
+#if defined(_MSC_VER) || defined(__declspec)
+# define CO_DLLEXPORT LB_DLLEXPORT
+# define CO_DLLIMPORT LB_DLLIMPORT
+#elif __GNUC__ >= 4
+#  define CO_DLLEXPORT __attribute__ ((visibility ("default"))) 
+#  define CO_DLLIMPORT __attribute__ ((visibility ("default")))
+#else 
+#  define CO_DLLEXPORT
+#  define CO_DLLIMPORT
+#endif
+
 #if defined(COLLAGE_STATIC)
 #  define CO_API
 #elif defined(COLLAGE_SHARED)
-#  define CO_API LB_DLLEXPORT
+#  define CO_API CO_DLLEXPORT
 #else
-#  define CO_API LB_DLLIMPORT
+#  define CO_API CO_DLLIMPORT
+#endif
+
+#if __GNUC__ >= 4
+#  define CO_API_CL CO_API
+#else
+#  define CO_API_CL
 #endif
 
 #endif //CO_API_H

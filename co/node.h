@@ -39,7 +39,7 @@ namespace detail { class Node; }
      * through which is reachable. A Node provides the basic communication
      * facilities through message passing.
      */
-    class Node : public Dispatcher, public lunchbox::Referenced
+    class CO_API_CL Node : public Dispatcher, public lunchbox::Referenced
     {
     public:
         /**

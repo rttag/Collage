@@ -29,7 +29,7 @@ namespace co
 namespace detail { class CommandQueue; }
 
     /** A thread-safe queue for ICommand buffers. */
-    class CommandQueue : public lunchbox::NonCopyable
+    class CO_API_CL CommandQueue : public lunchbox::NonCopyable
     {
     public:
         /** Construct a new command queue. @version 1.0 */

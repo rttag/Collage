@@ -42,7 +42,7 @@ typedef lunchbox::RefPtr< ObjectCM > ObjectCMPtr;
  * develop and use distributed objects. The Serializable implements a typical
  * common use case based on the basic Object.
  */
-class Object : public Dispatcher
+class CO_API_CL Object : public Dispatcher
 {
 public:
     /** Object change handling characteristics, see Programming Guide */

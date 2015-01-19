@@ -33,6 +33,10 @@ if(LUNCHBOX_USE_DNSSD)
   set(FEATURES "${FEATURES} zeroconf")
 endif()
 
+if(CMAKE_COMPILER_IS_GNUCXX)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
+endif() 
+
 if(NOT MSVC)
   set(PTHREAD_LIBRARIES pthread)
 endif()
