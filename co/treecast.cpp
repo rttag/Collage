@@ -42,6 +42,7 @@ public:
     void stopIOService()
     {
         _timer.cancel();
+        _io.stop();
     }
 
     boost::asio::deadline_timer& timer()
