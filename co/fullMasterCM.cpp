@@ -224,11 +224,12 @@ void FullMasterCM::_initSlave( MasterCMCommand command,
     while( i != _instanceDatas.end() && (*i)->os.getVersion() < start )
         ++i;
 
+    bool mc = Global::getIAttribute( Global::IATTR_MULTICAST_MAPS ) == 1;
     for( ; i != _instanceDatas.end() && (*i)->os.getVersion() <= end; ++i )
     {
         if( !dataSent )
         {
-            _sendMapSuccess( command, true );
+            _sendMapSuccess( command, mc );
             dataSent = true;
         }
 
@@ -247,7 +248,9 @@ void FullMasterCM::_initSlave( MasterCMCommand command,
         _sendMapReply( command, replyVersion, true, replyUseCache, false );
     }
     else
-        _sendMapReply( command, replyVersion, true, replyUseCache, true );
+    {
+        _sendMapReply( command, replyVersion, true, replyUseCache, mc );
+    }
 
 #ifdef EQ_INSTRUMENT_MULTICAST
     if( _miss % 100 == 0 )

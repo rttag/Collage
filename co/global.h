@@ -103,6 +103,7 @@ namespace co
             IATTR_OBJECT_COMPRESSION,    //!< @internal threshold to compress
             IATTR_TREECAST_THRESHOLD,    //!< @internal threshold when to use tc
             IATTR_TREECAST_SMALLSCATTER_THRESHOLD, //!< @internal switch in tc between small and big scatter
+            IATTR_MULTICAST_MAPS,       //!< @internal use mc for normal map ops
             IATTR_ALL
         };
 

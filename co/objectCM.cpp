@@ -168,7 +168,8 @@ void ObjectCM::_initSlave( MasterCMCommand command,
 #endif
     replyUseCache = false;
 
-    _sendMapSuccess( command, true );
+    bool mc = Global::getIAttribute( Global::IATTR_MULTICAST_MAPS ) == 1;
+    _sendMapSuccess( command, mc );
 
     // send instance data
     ObjectInstanceDataOStream os( this );
@@ -178,9 +179,9 @@ void ObjectCM::_initSlave( MasterCMCommand command,
     os.disable();
     if( !os.hasSentData( ))
         // no data, send empty command to set version
-        _sendEmptyVersion( command, replyVersion, true /* mc */ );
+        _sendEmptyVersion( command, replyVersion, mc );
 
-    _sendMapReply( command, replyVersion, true, replyUseCache, true );
+    _sendMapReply( command, replyVersion, true, replyUseCache, mc );
 }
 
 void ObjectCM::_sendMapSuccess( const MasterCMCommand& command,

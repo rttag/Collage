@@ -147,7 +147,8 @@ void ObjectInstanceDataOStream::sendMapData( NodePtr node,
     _command = CMD_NODE_OBJECT_INSTANCE_MAP;
     _nodeID = node->getNodeID();
     _instanceID = instanceID;
-    _setupConnection( node, true /* useMulticast */ );
+    bool mc = Global::getIAttribute( Global::IATTR_MULTICAST_MAPS ) == 1;
+    _setupConnection( node, mc );
     _resend();
     _clearConnections();
 }
@@ -160,7 +161,8 @@ void ObjectInstanceDataOStream::enableMap( const uint128_t& version,
     _nodeID = node->getNodeID();
     _instanceID = instanceID;
     _version = version;
-    _setupConnection( node, true /* useMulticast */ );
+    bool mc = Global::getIAttribute( Global::IATTR_MULTICAST_MAPS ) == 1;
+    _setupConnection( node, mc );
     _enable();
 }
 
