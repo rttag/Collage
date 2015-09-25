@@ -67,6 +67,7 @@ void Treecast::shutdown()
 {
     _ioThread->stopIOService();
     _ioThread->join();
+    delete _ioThread;
 }
 
 Treecast::Treecast()
