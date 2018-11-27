@@ -48,6 +48,7 @@
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_signed.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
+#include <boost/serialization/array_wrapper.hpp>
 
 
 namespace co
@@ -68,7 +69,7 @@ public:
 
     /** @internal use optimized save for arrays. */
     template< typename T >
-    void save_array( const boost::serialization::array< T >& a, unsigned int );
+    void save_array( const boost::serialization::array_wrapper< T >& a, unsigned int );
 
     /** @internal enable serialization optimization for arrays. */
     struct use_array_optimization

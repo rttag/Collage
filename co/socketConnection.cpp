@@ -424,7 +424,7 @@ void SocketConnection::readNB( void* buffer, const uint64_t bytes )
     if( isClosed() )
         return;
 
-    WSABUF wsaBuffer = { LB_MIN( bytes, 65535 ),
+    WSABUF wsaBuffer = { LB_MIN( (ULONG)bytes, 65535 ),
                          reinterpret_cast< char* >( buffer ) };
     DWORD  flags = 0;
 
@@ -550,7 +550,7 @@ int64_t SocketConnection::write( const void* buffer, const uint64_t bytes )
     DWORD  wrote;
     WSABUF wsaBuffer =
         {
-            LB_MIN( bytes, 65535 ),
+            LB_MIN((ULONG)bytes, 65535 ),
             const_cast<char*>( static_cast< const char* >( buffer ))
         };
 

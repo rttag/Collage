@@ -17,7 +17,7 @@ set(VERSION_PATCH "0")
 include(Common)
 include(GitTargets)
 include(UpdateFile)
-
+add_definitions(-D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS -D_WINSOCK_DEPRECATED_NO_WARNINGS)
 include(FindPackages)
 set(COLLAGE_DEPENDENT_LIBRARIES Lunchbox)
 
