@@ -17,7 +17,7 @@
 
 
 template< typename T >
-void DataOStreamArchive::save_array( const boost::serialization::array< T >& a,
+void DataOStreamArchive::save_array( const boost::serialization::array_wrapper< T >& a,
                                      unsigned int )
 {
     _stream << Array< const T >( a.address(), a.count( ));

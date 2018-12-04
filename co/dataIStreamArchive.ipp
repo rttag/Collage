@@ -23,7 +23,7 @@ namespace co
 {
 
 template< typename T >
-void DataIStreamArchive::load_array( boost::serialization::array< T >& a,
+void DataIStreamArchive::load_array( boost::serialization::array_wrapper< T >& a,
                                      unsigned int )
 {
     _stream >> Array< T >( a.address(), a.count( ));

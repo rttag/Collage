@@ -102,26 +102,26 @@ int main( int argc, char **argv )
     TEST( client->listen( ));
     TEST( client->connect( serverProxy ));
 
-    Object master;
-    TEST( client->registerObject( &master ));
+    Object *master = new Object();
+    TEST( client->registerObject( master ));
 
-    Object slave;
-    TEST( server->mapObject( &slave, master.getID( )));
+    Object *slave = new Object();
+    TEST( server->mapObject( slave, master->getID( )));
 
-    Thread thread( slave );
+    Thread thread( *slave );
     TEST( thread.start( ));
 
     lunchbox::Clock clock;
-    master.commit();
-    master.commit(); // should block
+    master->commit();
+    master->commit(); // should block
     const float time = clock.getTimef();
 
-    TESTINFO( master.getVersion() == 3, master.getVersion( ));
+    TESTINFO( master->getVersion() == 3, master->getVersion( ));
     TESTINFO( time > 100.f, time );
 
     thread.join();
-    server->unmapObject( &slave );
-    client->deregisterObject( &master );
+    server->unmapObject( slave );
+    client->deregisterObject( master );
 
     TEST( client->disconnect( serverProxy ));
     TEST( client->close( ));
@@ -135,6 +135,9 @@ int main( int argc, char **argv )
     serverProxy = 0;
     client      = 0;
     server      = 0;
+
+	delete slave;
+	delete master;
 
     co::exit();
     return EXIT_SUCCESS;

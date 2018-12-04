@@ -37,7 +37,7 @@
 #include <boost/archive/basic_binary_iarchive.hpp>
 #pragma warning( pop )
 #include <boost/archive/detail/register_archive.hpp>
-#include <boost/archive/shared_ptr_helper.hpp>
+//#include <boost/archive/shared_ptr_helper.hpp>
 #include <boost/serialization/is_bitwise_serializable.hpp>
 
 #include <boost/spirit/home/support/detail/endian.hpp>
@@ -46,15 +46,17 @@
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_unsigned.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
-
+#include <boost/serialization/array_wrapper.hpp>
 #include <boost/utility/enable_if.hpp>
+
 
 namespace co
 {
 /** A boost.serialization input archive reading from a co::DataIStream. */
 class DataIStreamArchive
     : public boost::archive::basic_binary_iarchive< DataIStreamArchive >
-    , public boost::archive::detail::shared_ptr_helper
+//    , public boost::archive::detail::shared_ptr_helper
+	
 {
     typedef boost::archive::basic_binary_iarchive< DataIStreamArchive > Super;
 
@@ -67,7 +69,7 @@ public:
 
     /** @internal use optimized load for arrays. */
     template< typename T >
-    void load_array( boost::serialization::array< T >& a, unsigned int );
+    void load_array( boost::serialization::array_wrapper< T >& a, unsigned int );
 
     /** @internal enable serialization optimization for arrays. */
     struct use_array_optimization
