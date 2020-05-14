@@ -2,7 +2,9 @@
 
 include(CMakeParseArguments)
 include(PurpleInstallPDB)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tclap/include)
+include_directories(
+  ${Boost_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/tclap/include)
 
 macro(CO_ADD_TOOL NAME)
   cmake_parse_arguments(THIS "" "" "SOURCES" ${ARGN})
