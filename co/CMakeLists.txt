@@ -6,6 +6,8 @@
 include(configure.cmake)
 include(files.cmake)
 
+include_directories(${Boost_INCLUDE_DIR})
+
 option(COLLAGE_AGGRESSIVE_CACHING "Disable to reduce memory consumption" ON)
 mark_as_advanced(COLLAGE_AGGRESSIVE_CACHING)
 
