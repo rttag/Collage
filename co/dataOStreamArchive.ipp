@@ -37,8 +37,10 @@ DataOStreamArchive::save( const T& t )
 {
 #if BOOST_VERSION < 104800
     namespace bs = boost::detail;
+#elif BOOST_VERSION < 106900
+	namespace bs = boost::spirit::detail;
 #else
-    namespace bs = boost::spirit::detail;
+	namespace bs = boost::endian;
 #endif
 
     if( T temp = t )
@@ -62,7 +64,11 @@ DataOStreamArchive::save( const T& t )
 
         // we choose to use little endian because this way we just
         // save the first size bytes to the stream and skip the rest
+#if BOOST_VERSION < 106900
         bs::store_little_endian<T, sizeof(T)>( &temp, t );
+#else
+		bs::endian_store<T, sizeof(T), bs::order::little>((unsigned char *)&temp,t);
+#endif
         save_binary( &temp, size );
     }
     else
@@ -74,7 +80,11 @@ template< typename T >
 typename boost::enable_if< boost::is_floating_point<T> >::type
 DataOStreamArchive::save( const T& t )
 {
+#if BOOST_VERSION < 106900
     namespace fp = boost::spirit::math;
+#else
+	namespace fp = boost::math;
+#endif
 
     typedef typename fp::detail::fp_traits<T>::type traits;
 
@@ -99,7 +109,11 @@ DataOStreamArchive::save( const T& t )
         bits = 0;
         break;
     case FP_NAN:
+#if BOOST_VERSION < 106900
         bits = traits::exponent | traits::mantissa;
+#else
+		bits = traits::exponent | traits::significand;
+#endif
         break;
     case FP_INFINITE:
         bits = traits::exponent | (t<0) * traits::sign;

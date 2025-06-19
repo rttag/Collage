@@ -54,6 +54,8 @@
 #include <lunchbox/types.h>
 #include <lunchbox/servus.h>
 
+#include <unordered_map>
+
 namespace co
 {
 namespace
@@ -63,12 +65,20 @@ typedef std::list< ICommand > CommandList;
 typedef lunchbox::RefPtrHash< Connection, NodePtr > ConnectionNodeHash;
 typedef ConnectionNodeHash::const_iterator ConnectionNodeHashCIter;
 typedef ConnectionNodeHash::iterator ConnectionNodeHashIter;
-typedef stde::hash_map< uint128_t, NodePtr > NodeHash;
-typedef NodeHash::const_iterator NodeHashCIter;
-typedef stde::hash_map< uint128_t, LocalNode::PushHandler > HandlerHash;
-typedef HandlerHash::const_iterator HandlerHashCIter;
 typedef std::pair< LocalNode::CommandHandler, CommandQueue* > CommandPair;
+
+#if _MSC_VER < 1920
+typedef stde::hash_map< uint128_t, NodePtr > NodeHash;
+typedef stde::hash_map< uint128_t, LocalNode::PushHandler > HandlerHash;
 typedef stde::hash_map< uint128_t, CommandPair > CommandHash;
+#else
+typedef std::unordered_map< uint128_t, NodePtr > NodeHash;
+typedef std::unordered_map< uint128_t, LocalNode::PushHandler > HandlerHash;
+typedef std::unordered_map< uint128_t, CommandPair > CommandHash;
+#endif
+
+typedef NodeHash::const_iterator NodeHashCIter;
+typedef HandlerHash::const_iterator HandlerHashCIter;
 typedef CommandHash::const_iterator CommandHashCIter;
 }
 

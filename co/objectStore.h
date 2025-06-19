@@ -31,6 +31,8 @@
 
 #include "dataIStreamQueue.h"  // member
 
+#include <unordered_map>
+
 namespace co
 {
     class InstanceCache;
@@ -184,7 +186,11 @@ namespace co
         /** enableSendOnRegister() invocations. */
         lunchbox::a_int32_t _sendOnRegister;
 
+        #if _MSC_VER < 1920
         typedef stde::hash_map< lunchbox::uint128_t, Objects > ObjectsHash;
+        #else
+		typedef std::unordered_map< lunchbox::uint128_t, Objects > ObjectsHash;
+        #endif
         typedef ObjectsHash::const_iterator ObjectsHashCIter;
 
         /** All registered and mapped objects.

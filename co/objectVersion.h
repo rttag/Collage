@@ -103,8 +103,10 @@ template<> inline void byteswap( co::ObjectVersion& value ) //!< @internal
 }
 }
 
+#if _MSC_VER < 1920
 LB_STDEXT_NAMESPACE_OPEN
 #ifdef LB_STDEXT_MSVC
+
     /** ObjectVersion hash function. */
     template<>
     inline size_t hash_compare< co::ObjectVersion >::operator()
@@ -115,6 +117,7 @@ LB_STDEXT_NAMESPACE_OPEN
 
         return hash_value( hashVersion ^ hashID );
     }
+
 #else
     /** ObjectVersion hash function. */
     template<> struct hash< co::ObjectVersion >
@@ -127,5 +130,18 @@ LB_STDEXT_NAMESPACE_OPEN
     };
 #endif
 LB_STDEXT_NAMESPACE_CLOSE
+#else
+namespace std
+{
+
+	template <>
+	struct std::hash<co::ObjectVersion> {
+		std::size_t operator()(const co::ObjectVersion& obj) const {
+			return static_cast<size_t>(std::hash<lunchbox::uint128_t>{}(obj.version) ^ std::hash<lunchbox::uint128_t>{}(obj.identifier));
+		}
+	};
+}
+#endif
+
 
 #endif // CO_OBJECT_H

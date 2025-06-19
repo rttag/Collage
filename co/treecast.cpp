@@ -101,7 +101,7 @@ void Treecast::send( lunchbox::Bufferb& data, Nodes const& nodes )
 
     // Sort the rest of the myNodes vector for quicker lookup later
     std::sort(myNodes.begin()+1, myNodes.end());
-    std::unique(myNodes.begin()+1, myNodes.end());
+    myNodes.erase(std::unique(myNodes.begin() + 1, myNodes.end()), myNodes.end());
     _filterNodeList( myNodes );
 
     // Store metadata about this message

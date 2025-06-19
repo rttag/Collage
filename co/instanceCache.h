@@ -32,6 +32,7 @@
 #include <lunchbox/uuid.h>      // member
 
 #include <iostream>
+#include <unordered_map>
 
 namespace co
 {
@@ -130,7 +131,12 @@ namespace co
             TimeDeque times;
         };
 
+        #if _MSC_VER < 1920
         typedef stde::hash_map< lunchbox::uint128_t, Item > ItemHash;
+        #else
+		typedef std::unordered_map< lunchbox::uint128_t, Item > ItemHash;
+        #endif
+
         typedef ItemHash::iterator ItemHashIter;
         lunchbox::Lockable< ItemHash > _items;
 

@@ -43,8 +43,10 @@ DataIStreamArchive::load( T& t )
 {
 #if BOOST_VERSION < 104800
     namespace bs = boost::detail;
-#else
+#elif BOOST_VERSION < 106900
     namespace bs = boost::spirit::detail;
+#else
+	namespace bs = boost::endian;
 #endif
 
     // get the number of bytes in the stream
@@ -64,7 +66,11 @@ DataIStreamArchive::load( T& t )
 
         // load the value from little endian - is is then converted
         // to the target type T and fits it because size <= sizeof(T)
+#if BOOST_VERSION < 106900
         t = bs::load_little_endian<T, sizeof(T)>( &temp );
+#else
+		t = bs::endian_load<T, sizeof(T), bs::order::little>((unsigned char *)&temp);
+#endif
     }
     else
         // zero optimization
@@ -75,7 +81,11 @@ template< typename T >
 typename boost::enable_if<boost::is_floating_point<T> >::type
 DataIStreamArchive::load( T& t )
 {
+#if BOOST_VERSION < 106900
     namespace fp = boost::spirit::math;
+#else
+	namespace fp = boost::math;
+#endif
     typedef typename fp::detail::fp_traits<T>::type traits;
 
     // if you end here there are three possibilities:

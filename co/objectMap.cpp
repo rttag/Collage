@@ -26,6 +26,8 @@
 
 #include <lunchbox/scopedMutex.h>
 
+#include <unordered_map>
+
 namespace co
 {
 namespace
@@ -42,7 +44,12 @@ struct Entry //!< One object map item
     bool own;           //!< The object is created by us, delete it
 };
 
+#if _MSC_VER < 1920
 typedef stde::hash_map< uint128_t, Entry > Map;
+#else
+typedef std::unordered_map< uint128_t, Entry > Map;
+#endif
+
 typedef Map::iterator MapIter;
 typedef Map::const_iterator MapCIter;
 typedef std::vector< uint128_t > IDVector;

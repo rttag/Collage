@@ -42,8 +42,13 @@
 #  include <boost/serialization/item_version_type.hpp>
 #endif
 
+#if BOOST_VERSION < 106900
 #include <boost/spirit/home/support/detail/endian.hpp>
 #include <boost/spirit/home/support/detail/math/fpclassify.hpp>
+#else
+#include <boost/math/special_functions/fpclassify.hpp>
+#include <boost/endian/conversion.hpp>
+#endif
 
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_signed.hpp>

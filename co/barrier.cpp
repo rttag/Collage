@@ -35,6 +35,8 @@
 #include <lunchbox/monitor.h>
 #include <lunchbox/stdExt.h>
 
+#include <unordered_map>
+
 namespace co
 {
 namespace
@@ -49,7 +51,12 @@ struct Request
     Nodes nodes;
 };
 
+#if _MSC_VER < 1920
 typedef stde::hash_map< uint128_t, Request > RequestMap;
+#else
+typedef std::unordered_map< uint128_t, Request > RequestMap;
+#endif
+
 typedef RequestMap::iterator RequestMapIter;
 }
 

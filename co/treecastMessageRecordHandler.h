@@ -6,6 +6,7 @@
 #include <lunchbox/lock.h>
 
 #include <vector>
+#include <unordered_map>
 
 namespace co {
 
@@ -28,7 +29,11 @@ class TreecastMessageRecordHandler
   private:
     lunchbox::SpinLock                                            m_SpinLock;
     LocalNode*                                                    m_localNode;
+    #if _MSC_VER < 1920
     typedef stde::hash_map<UUID, TreecastMessageRecordPtr> TreecastMessageRecordMap_T;
+    #else
+	typedef std::unordered_map<UUID, TreecastMessageRecordPtr> TreecastMessageRecordMap_T;
+    #endif
     typedef TreecastMessageRecordMap_T::iterator          MulticastMessageRecordMap_TIt;
     TreecastMessageRecordMap_T                                   m_treecastMessageRecordMap;
 };

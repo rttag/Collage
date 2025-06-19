@@ -29,6 +29,8 @@
 
 #include "objectDataIStream.h" // pooled object
 
+#include <unordered_map>
+
 namespace co
 {
     /**
@@ -49,7 +51,11 @@ namespace co
         void recycle( ObjectDataIStream* stream );
 
     protected:
+        #if _MSC_VER < 1920
         typedef stde::hash_map< uint128_t, ObjectDataIStream* > PendingStreams;
+        #else
+		typedef std::unordered_map< uint128_t, ObjectDataIStream* > PendingStreams;
+        #endif
         typedef PendingStreams::const_iterator PendingStreamsCIter;
 
         /** Not yet ready streams. */
